@@ -36,7 +36,43 @@
 | `BQ24075` 睡眠时 BAT 脚电流 `IBAT(PDWN)` | **4.3 µA 典型 / 6.5 µA 最大** | TI SLUS810N |
 | **SYSOFF 断开后的 BAT 漏电专门指标** | **数据手册中不存在** | TI SLUS810N（"10 µA" 是 §9.4.1 的举例叙述，**不是规格**） |
 | SYSOFF 内部上拉 | 约 5 MΩ（悬空约 0.84 µA） | TI SLUS810N |
+| **`SYSOFF` 输入阈值** | **`V_IL` 最大 0.4 V；`V_IH` 最小 1.4 V / 最大 6 V；绝对最大 −0.3…7 V** | TI SLUS810N ⇒ **3.3 V 逻辑可直驱，无需电平转换** |
+| `SYSOFF` 拉高时 `/CHG` 的行为 | *"The `/CHG` output remains low when SYSOFF is high."* | TI SLUS810N §9.3.5.5 |
 | ⚠️ 反向发现 | **nice!nano v2 用 BQ24075，却把 SYSOFF 硬接 GND**，断电改走门控 LDO 的 CE | 官方原理图 |
+| ✅ TI 官方应用笔记 | **SLUAA18**《Achieving Ship Mode With the BQ24075/76/78/79》（2021-11），专讲本问题 | TI；datasheet 图 10-13 亦题名 *"Using BQ24075 or BQ24079 to **Disconnect the Battery From the System**"* |
+
+#### ✅ 更正：`SYSOFF` 上并不存在「两股力量打架」
+
+我此前把「100 kΩ 上拉 vs NMOS 下拉」描述成需要解决的冲突。**这是错的**：
+
+- 100 kΩ 是**无源上拉**，NMOS 是**无源下拉** —— 二者构成**分压器**，不是两个源在对顶。
+- `V(SYSOFF) = 4.2 V × Rds(on) / (100 kΩ + Rds(on)) ≈` **84 µV**，
+  **比 `V_IL(max) = 0.4 V` 还低约 5000 倍** ⇒ NMOS 导通时 `SYSOFF` 稳稳定为低。
+- 漏电 ≈ 42 µA（经 100 kΩ）+ 0.84 µA（经内部 5 MΩ）⇒ 等效约 98 kΩ。
+
+#### 🔴 由此推出一条硬约束：`2N7002` 那颗「插 USB 强制拉低」的管子是**必须的，不是可选**
+
+TI 原话（SLUAA18）：*"When VIN is plugged in, the system is powered and **SYSOFF can be pulled low
+using the GPIO to keep the battery connected to the output for charging**."*
+
+⇒ **没有它，「关机档 + 插着 USB」会静默地永远充不进电**，而用户看到的只是「插了线但不充电」。
+这正是参考设计里那颗 `2N7002` 的唯一职责。**TI 用整篇应用笔记讲这件事。**
+
+#### ⚠️ 极性脚注（反直觉，容易接反）
+
+`SYSOFF` **高 = ship mode / 断开电池 / 同时禁用充电** —— 与「开关拨到 ON 应该是高」的直觉相反。
+
+#### 社区实现远不止 3 个
+
+用 `gh search code "SYSOFF" --extension kicad_sch` 扫到 **25+ 个项目**，其中键盘相关的包括：
+`zhiayang/mikoto`（全局标签 `CHARGE_CTRL_1/2`，逻辑电平充电控制）、
+`jncronin/gk`（`PWRCTRL1..3`、`PWR_WKUP1`）、
+`crides/fissure`（用 **`AO3400A`** 而非 `2N7002`，同拓扑不同件）、
+`ebastler/osprey`、`PumaFPV/PMK`、`rianadon/Cosmos-Keyboard-PCBs`、
+`kurtis-lew/Conejo`、`JonasLindinger/MicroPad`、`Spaceboards/SpaceboardsHardware` 等。
+
+⚠️ **未发现**任何项目在 MOSFET 漏极串电阻、加二极管、或采用其它冲突消解拓扑；
+**也未发现**任何「振荡/电平不定」的失效记录 ⇒ 该拓扑本身是稳的。
 
 ## 各方案评估
 
@@ -129,7 +165,7 @@
   社区里确有项目引用了该符号却挂了 **DPDT** 的 land pattern。
   可复用社区封装：`HalfSweet/Kicad_Lib` → `My Switch.pretty/SW-SMD_MST23D19G2.kicad_mod`。
 
-**方式 2：`SP3T` + 一颗晶体管** —— 用「有线」档的 GPIO 节点去驱动 `SYSOFF`
+**方式 2：`SP3T` + 一颗 NMOS** —— 用「有线」档的 GPIO 节点去驱动 `SYSOFF`
 
 - 原理（**已从 ZMK 驱动源码核实**，`app/module/drivers/kscan/kscan_gpio_direct.c`）：
   ```c
@@ -143,14 +179,36 @@
   `BIT(0)` 即 `GPIO_ACTIVE_LOW` ⇒ 在本项目配置下：
   **选中的档**（有线）不加内部上下拉，由开关公共端**硬接到 GND** ⇒ 节点 **0 V**；
   **未选中的档** 被 `GPIO_PULL_UP` 拉到 **3.3 V**。
-  所以「有线档」那个节点可以当作一个**低有效**的控制信号去驱动晶体管拉高 `SYSOFF`。
-- ✅ 沿用 ADR-0009 已经要用的 `SP3T`，只多 1 颗小管 + 2 颗电阻。
-- ⚠️ **有一个必须设计规避的隐患（非推测，同样有源码依据）**：
-  非有线档时该节点被**上拉到 3.3 V**，而晶体管发射极在 **4.2 V** ⇒ `Veb = 0.9 V`。
-  对常见小信号 PNP（`Veb(on) ≈ 0.7 V`）这**足以使其进入导通区**，
-  导致 `SYSOFF` 在无线档被意外拉高、**键盘在无线档被断电**。
-  ⇒ 必须用分压/电平移位/或改 NMOS 拓扑规避，**且必须实测**。
-  ❓ 具体规避电路的取值**尚未设计、未实测**。
+
+- ✅ **更正：不需要 PNP/PMOS，一颗 NMOS 就够。**
+  我此前写的隐患（`Veb = 0.9 V` 使 PNP 误导通）**是用错器件造成的**。
+  改用 NMOS 后：栅极 = 该节点，源极 = GND，漏极 = `SYSOFF`（带 100 kΩ 上拉到 `VBAT`）：
+  - 无线档：节点 3.3 V ⇒ `Vgs = 3.3 V` > `Vth`（2N7002 约 0.8–1.5 V）⇒ **导通** ⇒ `SYSOFF` 拉低 ⇒ 电池接通 ✓
+  - 有线档：节点 0 V ⇒ `Vgs = 0` ⇒ **截止** ⇒ 100 kΩ 把 `SYSOFF` 拉到 `VBAT` ⇒ 电池断开 ✓
+  - 而且 `SYSOFF` 的输入阈值很宽松（见下）：`V_IL` 最大 **0.4 V**、`V_IH` 最小 **1.4 V**，
+    ⇒ **3.3 V 逻辑可以直接驱动，无需电平转换**。
+
+- 🔴 **但方式 2 有一个方式 1 没有的启动死锁问题（以下是我的推导，标注为待验证）**：
+  系统完全断电时（有线档、未插 USB），MCU 不供电 ⇒ 3.3 V 轨消失 ⇒
+  **驱动给节点加的内部上拉也消失，节点浮空** ⇒ NMOS 栅极电位不确定。
+  此时 100 kΩ 把 `SYSOFF` 拉高 ⇒ 电池保持断开 ⇒ **系统永远起不来**。
+  （用户从「有线」拨回「无线」时就会撞上这个状态。）
+  要救就得给栅极加一个「始终存在」的上拉，而唯一始终存在的轨是 `VBAT` ——
+  但那会让 MCU 引脚承受 4.2 V（超出 3.3 V GPIO 的绝对最大额定），
+  改成分压则**持续漏电约 21 µA，等于把待机电流翻倍**（本项目目标约 20 µA）。
+
+  ⇒ **结论：方式 1 不仅更简单，而且没有这两个问题**（机械触点是纯被动的，
+  不需要 MCU 供电来维持状态）。**故推荐方式 1。**
+
+**方式 3（TI 官方文档记载，本项目不采用）：由 MCU GPIO 直接驱动 `SYSOFF`**
+
+TI 应用笔记 **SLUAA18**《Achieving Ship Mode With the BQ24075…》记载了这条：
+*"a few resistors, a push-button, and a FET that is controlled through an MCU General Purpose
+Input/Output (GPIO)"*，并说明 *"When VIN is plugged in, the system is powered and **SYSOFF can be
+pulled low using the GPIO** to keep the battery connected to the output for charging."*
+
+本项目不采用，因为它把「关机」变成固件职责 —— 固件跑飞或卡死时无法断电，
+与「物理开关」的初衷相反。**记为已知替代方案。**
 
 **倾向**：若 `DP3T` 能买到合适封装，**优先方式 1**（机械方案不会在无线档意外断电）；
 否则用方式 2，但必须把上述隐患当**一级风险**对待。

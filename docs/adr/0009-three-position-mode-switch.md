@@ -78,6 +78,13 @@ kscan_sp3t_toggle: kscan_sp3t_toggle {
 | 1 | `&out OUT_BLE &bt BT_SEL 0` | **蓝牙**：直连主机（配对位 0） |
 | 2 | `&out OUT_BLE &bt BT_SEL 1` | **2.4G**：连 Dongle（配对位 1） |
 
+> ℹ️ **上面用的是 `sideband-behaviors` 写法**（与上游 `zmk_uno`、Kinesis mWave 一致），
+> 好处是与 keymap 完全解耦。**还有一种等价写法**：把开关用 `kscan-composite`
+> 折进矩阵（`row-offset` 或 `col-offset`），再在 keymap 里给对应的 `RC(r,c)` 直接绑行为
+> —— 出货产品 **Altar I** 用的是这一种。
+> **本项目第一版选 sideband 写法**（改键位/Studio 改键都不会破坏模式开关）；
+> 若后续需要用户可自定义模式键位，再改成 composite 写法。
+
 `&out` 的选择会**持久化到 flash**（官方文档），与「开关位置 = 持久模式」的直觉一致。
 
 ## 依据（全部为一手核实）
@@ -90,6 +97,27 @@ kscan_sp3t_toggle: kscan_sp3t_toggle {
 | **ZMK 上游自带 SP3T 参考实现**：档 0→`&out OUT_USB`、档 1→`BLE+BT_SEL 0`、档 2→`BLE+BT_SEL 1` | `app/boards/shields/zmk_uno/zmk_uno.overlay`（v0.3.0 核对，**照抄即可**） |
 | 该特性由 **ZMK 创始人 Pete Johanson** 提需求（issue [#980](https://github.com/zmkfirmware/zmk/issues/980)），原文即「switch primary output, or BT profile」 | issue #980（2023-08-29 关闭，由 PR [#1305](https://github.com/zmkfirmware/zmk/pull/1305) 实现，2022-05-19 合入） |
 | **量产商品在用同一套机制**：Kinesis mWave（$119.95）「Profile Switch」三档 | `KinesisCorporation/MWave-zephyr-module`（产品页 + 开源模块，**已抽验 keymap 确认接线一致**） |
+| ⭐ **出货产品「Altar I」用完全相同的写法**（Electronic Materials Office）——`toggle-mode` + `GPIO_ACTIVE_LOW` + 三档经 composite 折进矩阵 | `electronicmaterialsoffice/firmware-altar-i` 的 `altar_i.dts`（**已下载核对原文**）：<br>`kscan_toggle` 3 个 GPIO（`&gpio1 11/10/13`）、`toggle-mode`，经 `kscan_composite` 以 **`col-offset = <7>`** 折入；三档映射为 **BT2 / BT1 / USB** |
+| 商业产品 **CannonKeys Photon** 用 2 个 toggle GPIO，第二档经 `zmk,kscan-sideband-behaviors` 触发 `&mo 2` | `cannonkeys/zmk-cannonkeys-keyboards` |
+| 另有 `msorair/zmk-config`(bdkb40)、`ebastler/zmk-config`(altar rev_a) 等用同样的 3 GPIO 写法 | 各仓库 devicetree |
+
+> 💡 **两个值得直接抄的细节（来自 Altar I）**：
+> 1. **`kscan_toggle` 与 `kscan_composite` 都标了 `wakeup-source`** ⇒
+>    拨动开关本身就能把 MCU 从深度睡眠唤醒（不必额外引一根唤醒线）。
+> 2. 用 `col-offset` 而非 `row-offset` 把开关折进矩阵 —— 两者都可以，
+>    选哪个只影响矩阵变换里写 `RC(row,col)` 的行列号。
+>
+> ⚠️ **一处文档与实践不一致，需注意**：ZMK v0.3.0 官方文档在 toggle-mode 一节明确说
+> *"the pull resistors get automatically set by the driver and **should not be set in the
+> devicetree** via GPIO flags"*；但同一页前面又写直接 GPIO 应写
+> `(GPIO_ACTIVE_LOW | GPIO_PULL_UP)`，而**出货的 Altar I 确实写了 `GPIO_PULL_UP`**。
+> 读驱动源码可知：驱动会用 `dt_flags` 里的 `GPIO_ACTIVE_LOW` 自行推导出 `PULL_UP`，
+> 所以 DT 再写一遍是**冗余但无害**。**本项目按文档写法（不写 pull），并记下这个分歧。**
+>
+> ⚠️ **重要边界**：Altar I 的三档是 **BT2 / BT1 / USB**，
+> **没有任何一档涉及电源、充电、`SYSOFF` 或电池**，也**没有 OFF 档**。
+> ⇒ 它证明的是「三档开关选连接模式」这个机制，**不是**「一个开关同时管模式与电源」。
+> 截至本次调研，**公开仓库里没有「模式+电源」合并的硬件先例**；ADR-0010 的合并方案是本项目自己的设计。
 | 开关状态在**开机时读取**，关机期间拨动也能正确识别 | ZMK 官方 kscan 文档 |
 
 ## 引脚预算影响
