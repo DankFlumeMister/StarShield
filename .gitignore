@@ -50,6 +50,21 @@ __pycache__/
 /_*.py
 /_*.txt
 
+# --- 根目录抓取/调试产物（调研工具常落在这里）---
+# 真实事故：一次 `git add -A` 把第三方三模键盘工程（257 文件）、一个 10 MB zip、
+# 几个 .ps1 与 .html 提交并推到了公开仓库。提交前务必跑
+#   python docs/_tools/check_repo_tree.py --staged
+# 该脚本用【白名单】校验顶层条目，能挡住「名字事先想不到的新目录」。
+/*.ps1
+/*.zip
+/*.html
+/*.htm
+/*.json
+/*.txt
+/*.pdf
+/*.png
+/*.jpg
+
 # --- Node / JS dependencies & caches（绝不入库）---
 node_modules/
 npmcache/
