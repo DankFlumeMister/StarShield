@@ -12,8 +12,15 @@
 ## 无线架构
 
 - **固件**：ZMK。
-- **无线方式**：第一版走 BLE Dongle 路线——Body 作为 BLE peripheral，经独立 Dongle（BLE central）连接主机。
-- **放弃真三模**：ZMK 不支持原生 2.4GHz 专有射频；ESB 模块与 BLE 互斥且需 fork ZMK。真 2.4GHz 推迟到后续版本。
+- **无线方式**：第一版走 BLE Dongle 路线——Body 作为 BLE peripheral，经独立 Dongle 连接主机。
+  **Dongle 形态已收紧为「BLE HID 主机」**（不是 ZMK 官方的分体 central）——后者会让键盘
+  离开 Dongle 即变砖，且失去蓝牙/有线两个模式。见 **ADR-0001 修订**。
+- **放弃真三模**：ZMK 不支持原生 2.4GHz 专有射频。⚠️ 本轮调研**加强了**这个决定：
+  Keychron 的 2.4G 实现依赖**闭源二进制**（Nordic ESB 标注 `LicenseRef-Nordic-5-Clause`、
+  Realtek 预编译库），ZMK 官方 FAQ 亦以**许可证**理由明确拒绝。
+  ⇒ **障碍是法律而非技术**，本项目不应为此 fork ZMK。真 2.4GHz 推迟到后续版本。
+- **「2.4G」的含义**：本项目所说的「2.4G」= **经 BLE Dongle 连接**（BLE 本身工作在 2.4GHz），
+  **不是**原生 2.4GHz 专有射频。
 
 ## 硬件
 
@@ -23,7 +30,12 @@
 - **轴体**：MX 轴 + 热插拔座。
 - **充电**：BQ24072 做在主 PCB 上（1.5A 充电 + 电源路径管理），不使用控制器模块板载充电。
 - **电池**：3000mAh 3.7V LiPo，自带保护板。接口 JST-PH 2.0。
-- **电源开关**：SPDT 滑动开关，物理切断电池。
+- **连接模式开关**：三档拨片开关（SP3T）选择 **2.4G（Dongle）/ 蓝牙 / 有线**。
+  用 ZMK 上游原生机制读取（`zmk,kscan-gpio-direct` + `toggle-mode` + `zmk,kscan-sideband-behaviors`），
+  键盘侧零自定义固件。见 **ADR-0009**（🟡 提议，待确认）。
+- **电源开关**：⚠️ 原计划「SPDT 滑动开关物理切断电池」**已被推翻** ——
+  常见微型开关额定仅 50 mA，而回路达 2.4 A（**48 倍超额定**）。
+  改为方案：换 `BQ24075` + 小开关切 `SYSOFF`（开关只走约 42 µA）。见 **ADR-0010**（🟡 提议，待确认）。
 - **矩阵**：Apollo87H 仅覆盖主键区（其为 87 键 TKL，无小键盘）；95 键矩阵含小键盘与导航区，需自行规划。
 
 ## RGB 灯效
@@ -48,7 +60,13 @@
   详见 `docs/power-architecture.md`。
 - **充电电流**：1.5A ÷ 3.0Ah = 0.5C，不超电池规格；但线性充电器在 1.5A 时耗散约 2W，
   故**实际建议编程 0.5–1.0A**（R_ISET：1.0A=890Ω / 0.5A=1.78kΩ）。
-- **物理断电**：SPDT 滑动开关串在「电池 → BAT」之间，额定电流需 ≥2A（建议 3A 余量）。
+- **物理断电**：⚠️ 原「SPDT 串在电池→BAT 之间，额定 ≥2A」的方案**已推翻**：
+  微型 SPDT（如 `MSK12C02`）原厂额定只有 **12V DC / 50mA**，2.4A 时超额定 48 倍；
+  而能满足 6A 的机械开关体积大、需自制封装。
+  现推荐：换 `BQ24075`（与 `BQ24072` **封装完全相同**，pin15 = `SYSOFF`），
+  用小开关切 `SYSOFF`（开关只走约 **42 µA**），再用一颗 `2N7002` 保证插 USB 时仍能充电。
+  ⚠️ 记账：这是**低漏电**（约 4.3 µA）而**非电气隔离**。
+  见 **ADR-0010**（🟡 提议，待确认）。
 - **USB-C**：5.1k CC1/CC2 下拉（UFP 设备）。D+/D- 是否接入待定（见 `docs/power-architecture.md` §4）。
 
 ## 结构件
@@ -77,9 +95,6 @@
   **任何路线都做不到 5mm**。推荐 **605080 路线**（电池仓约 6.5×51×84mm，机壳深度 ≥8.5–9mm）。
   详见 `docs/controller-and-battery-facts.md` 第 2.1 节。
 - ZMK config 是否独立仓库
-- **矩阵引脚方案**：矩阵需 24 个 GPIO，而 nice!nano v2 官方仅 21 个。
-  候选：74HC595 移位寄存器（倾向）/ 改控制器 / 两块控制器 / 改用 ZMK 官方支持的 nRFMicro。
-  详见 `docs/matrix-assignment.md` 第 3 节。
 - **是否保留 SuperMini 兼容路线**：SuperMini 不被 ZMK 官方支持，且电池 ADC 脚与 nice!nano 冲突。
   需修订 ADR-0003。详见 `docs/controller-and-battery-facts.md` 第 1.3 节。
 - **USB-C 的 D+/D- 是否接入**：nice!nano 自带 USB-C，Body 可能不需要第二个数据口。

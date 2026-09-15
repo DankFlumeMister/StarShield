@@ -210,7 +210,10 @@ the microswitch** … this switch does not have any significant current flowing 
 | 开关实际电流 | ≈ 4.2 V / 100 kΩ ≈ **42 µA** → 对 50 mA 额定有 **约 1000 倍余量** |
 | 料号 | 仍可用 `MSK12C02`（便宜、SMD、有官方 KiCad 封装） |
 | **关键可行性** | ✅ 已核验：**`BQ24075RGT` 与 `BQ24072RGT` 封装完全相同**（`VQFN-16-1EP_3x3mm_P0.5mm_EP1.6x1.6mm`），pin 15 即 `SYSOFF` → **可视为 drop-in 替换** |
-| 副作用 | `SYSOFF` 拉高会同时禁用充电（串联接法固有） |
+| **先例数量** | ✅ **3 个独立实现**（不只设计指南）：**Croktopus 设计指南**、**kurtis-lew/Conejo**、**ebastler/osprey**，接线一致，均网表级核实 |
+| ⚠️ **残留漏电** | **`IBAT(PDWN)` = 4.3 µA 典型 / 6.5 µA 最大**（TI SLUS810N）。**数据手册中不存在「SYSOFF 断开后 BAT 漏电」的专门指标**；§9.4.1 的「10 µA」是举例叙述，**不是规格**。⇒ **这是低漏电态，不是电气隔离**（实用上 3000 mAh ÷ 4.3 µA ≈ 82 年，对存放目的等同于断开） |
+| ⚠️ **反向发现** | **nice!nano v2 用 BQ24075，却把 SYSOFF 硬接 GND**，断电改走门控 LDO 的 `CE` —— 旗舰商业 ZMK 控制器主动放弃了 SYSOFF 路线 |
+| 副作用 | `SYSOFF` 拉高会同时禁用充电（串联接法固有），需一颗 `2N7002` 在插 USB 时拉低 |
 | 待复核 | `BQ24075` 的 `EN1/EN2` 输入限流取值需与本项目一致 |
 
 **路线 B：保留 `BQ24072` + 大电流机械开关**
@@ -225,7 +228,13 @@ P-FET `S = 电池+`、`D = 系统`，栅极 100 kΩ 上拉到 S（默认 `Vgs=0`
 可行但缺乏先例。
 
 > 📌 结论：**路线 A 最优**（有真实先例 + drop-in 换芯片 + 保留小开关 + 官方封装齐全）。
-> 详见 `research/keyboard-precedent-power-switching.md` §2–§5 与 §8b.2。
+> 详见 `research/keyboard-precedent-power-switching.md` §2–§5 与 §8b.2，以及 **ADR-0010**。
+>
+> ⚠️ **另有一条「不加电池开关」的选项**：ZMK 官方把 `&soft_off` 定义为
+> *"an alternative to using a hardware switch to physically cut power"*，
+> 但同一份文档也说明 *"Power is **not** technically removed from the entire system"*。
+> 若第一版想省掉这颗开关，这是零硬件的替代（长期存放仍需拔 JST 插头）。
+> 取舍见 **ADR-0010** 方案甲。
 
 ### 5.4 🔴 RGB 门控 PMOS：**关断在满电时不可靠**（同样重大）
 
@@ -248,9 +257,21 @@ PMOS 源极接电池（4.2 V），栅极由 3.3 V GPIO 驱动：
 
 | 方案 | 做法 | 评价 |
 | --- | --- | --- |
-| **A. 加 NMOS 反相级** ✅ **推荐** | `2N7002`（S=GND，G 经 100 Ω 接 GPIO + 10 k 下拉）+ `AO3401A`（**S=电池轨、D=LED 轨**，栅极经 10 k 上拉到 S） | ✅ **有真实先例**（ZMK 设计指南网表已核验）；4.2 V 下 `Vgs(off) = 0`（保证关断）、`Vgs(on) ≈ −4.2 V`（充分导通）；ZMK 侧用 `GPIO_ACTIVE_HIGH` |
+| **A. 加 NMOS 反相级** ✅ **推荐** | `2N7002`（S=GND，G 经 100 Ω 接 GPIO + 10 k 下拉）+ `AO3401A`（**S=电池轨、D=LED 轨**，栅极经 10 k 上拉到 S） | ✅ **有真实先例**；4.2 V 下 `Vgs(off) = 0`（保证关断）、`Vgs(on) ≈ −4.2 V`（充分导通）；ZMK 侧用 `GPIO_ACTIVE_HIGH` |
 | B. 门控 LDO 使能脚 | 不去切 LED 电源，改切 3.3V LDO 的 `EN` | ✅ nice!nano v2 官方做法；但 **3.3 V 低于 LED 标称下限 3.7 V**，与 ADR-0007 冲突 |
 | C. PMOS 源极改接 3.3 V 轨 | 源极 3.3 V，`Vgs` 干净（0 / −3.3 V） | ❌ 同上，本项目的 LED 需要电池轨电压 |
+
+> ⚠️ **诚实性说明（勿把推断当结论）**：上面「`Vgs = −0.9 V` 会导致关不断」的**阈值侧有数据手册支撑**
+> （`AO3401A` 的 `VGS(th)` 为 −0.5 ~ −1.3 V，而 `RDS(ON)` **仅在 `VGS ≤ −2.5 V` 下规定**），
+> 但**功能性失效的量级未经实测，也没有任何项目如此记载** ⇒ 标记 `❓ UNVERIFIED`。
+> 更准确的表述是：**−0.9 V 落在亚阈值区，数据手册未规定该点行为，因此不能保证关断。**
+> 投板后**必须实测**该引脚的关断漏电。
+
+> ✅ **照抄哪一个：选 `kurtis-lew/Conejo`，不要照抄 Croktopus 设计指南。**
+> 体二极管分析见下一节；Conejo 是**同拓扑但方向正确**的实现（`S=VDDH` 电源、`D=EXT_PWR` 负载）。
+> ⚠️ **30+ 仓库核实结论：没有任何键盘项目把 P-FET 源极放在 4.2 V 电池轨、栅极直接由 3.3 V GPIO 驱动。**
+> 凡是 GPIO 直驱 P-FET 的项目（nRFMicro、nice!nano v1）**全部**把源极放在 **3.3 V 稳压轨** ——
+> 这正是它们规避 `Vgs(off) = −0.9 V` 的方式。
 
 ⚠️ **照抄设计指南时必须翻正 S/D**：该参考设计把 P-FET 的 **S/D 画反了**
 （S 在负载侧、D 在电源侧）——P-MOSFET 体二极管 anode = drain，

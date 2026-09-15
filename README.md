@@ -55,7 +55,7 @@ Dongle 插在主机上，从而获得接近 2.4GHz 的无线体验。硬件设�
 
 | 模块 | 状态 | 说明 |
 | --- | --- | --- |
-| 产品与硬件设计决策 | ✅ 已完成 | 8 条 ADR + 完整决策日志 |
+| 产品与硬件设计决策 | ✅ 已完成 | 11 条 ADR + 完整决策日志 |
 | 键位几何 | ✅ 已核验 | 95 键、19.50u × 6.25u（371.5 × 119.1 mm） |
 | 95 键矩阵分配 | ✅ 已完成 | 6 行 × 18 列，18 列达数学下界 |
 | PCB 原理图（矩阵部分） | ✅ 已完成 | **网表校验 10 项全通过、ERC 0 error** |
@@ -69,7 +69,7 @@ Dongle 插在主机上，从而获得接近 2.4GHz 的无线体验。硬件设�
 | 文档 | 内容 |
 | --- | --- |
 | [`docs/decisions.md`](docs/decisions.md) | 完整决策日志 |
-| [`docs/adr/`](docs/adr/) | 架构决策记录 0001–0008 |
+| [`docs/adr/`](docs/adr/) | 架构决策记录 0001–0010 |
 | [`docs/hardware-geometry.md`](docs/hardware-geometry.md) | 键位几何基准（含一次错误测量的教训） |
 | [`docs/matrix-assignment.md`](docs/matrix-assignment.md) | 95 键矩阵行列分配 + 网表校验 |
 | [`docs/matrix-folding-analysis.md`](docs/matrix-folding-analysis.md) | 为什么必须用移位寄存器（含引脚预算推导） |
@@ -154,9 +154,15 @@ KiCad 工程：用 KiCad 打开 `hardware/pcb/StarShield/Starshield.kicad_pro`�
 - **引脚分配的机械尺寸未用实物核对。** nice!nano 排针的 pitch 与每边引脚数
   来自 ZMK 官方设备树定义与 Pro Micro 标准旁证，**投板前必须用实物卡尺复核**。
 - 外壳必须分件打印：键区宽 **371.5 mm**，超过常见 256 mm 打印床。
-- 以下两项选型尚未定案（均已给出推荐方案）：
-  - **物理断电开关**：常见微型滑动开关额定电流仅 50 mA，远低于回路峰值；需换料或改用负载开关。
-  - **RGB 门控关断拓扑**：电池满电时 3.3 V GPIO 无法可靠关断高边 PMOS，需加反相级。
+- 以下三项**已有推荐方案但尚未确认**（详见 [ADR-0009](docs/adr/0009-three-position-mode-switch.md)、[ADR-0010](docs/adr/0010-battery-cutoff-strategy.md)）：
+  - **连接模式开关**：三档拨片（2.4G / 蓝牙 / 有线）。方案用 ZMK 上游原生机制
+    （`toggle-mode` + sideband behaviors），**键盘侧零自定义固件**；
+    但 Dongle 必须是「BLE HID 主机」形态，**其固件不是 ZMK，是一块独立的开发量**。
+  - **物理断电开关**：常见微型滑动开关额定仅 50 mA，而回路峰值达 2.4 A（超额定 48 倍）。
+    推荐换 `BQ24075` + 小开关切 `SYSOFF`（开关只走约 42 µA）。
+    ⚠️ 这是**低漏电**（约 4.3 µA）而非电气隔离。
+  - **RGB 门控关断拓扑**：电池满电时 3.3 V GPIO 无法保证关断源极在 4.2 V 轨的高边 PMOS，
+    需加一级 NMOS 反相（`GPIO_ACTIVE_HIGH`）。⚠️ 该失效的量级未经实测，标记为未核实。
 
 ---
 
