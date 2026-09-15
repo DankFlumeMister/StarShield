@@ -85,6 +85,7 @@ kscan_sp3t_toggle: kscan_sp3t_toggle {
 | 事实 | 来源 |
 | --- | --- |
 | `zmk,kscan-gpio-direct` 有 `toggle-mode` 属性；一档一个 GPIO；DT 里不写 pull | `app/module/dts/bindings/kscan/zmk,kscan-gpio-direct.yaml`（**已在 v0.3.0 逐行核对**） |
+| 上下拉**由驱动动态管理**：选中档不加内部上下拉（由开关硬接 GND），未选中档按极性加上拉/下拉 | `app/module/drivers/kscan/kscan_gpio_direct.c` 的 `kscan_gpio_get_extra_flags()` 与 `kscan_inputs_set_flags()`（**已读源码**）。本项目用 `GPIO_ACTIVE_LOW` ⇒ 未选中的档被上拉到 3.3 V。**这个细节是 ADR-0010「方式 2」的依据与风险来源** |
 | `zmk,kscan-sideband-behaviors` 存在，支持 `auto-enable`，且**不受 keymap 影响** | `app/dts/bindings/kscan/zmk,kscan-sideband-behaviors.yaml`（v0.3.0 核对） |
 | **ZMK 上游自带 SP3T 参考实现**：档 0→`&out OUT_USB`、档 1→`BLE+BT_SEL 0`、档 2→`BLE+BT_SEL 1` | `app/boards/shields/zmk_uno/zmk_uno.overlay`（v0.3.0 核对，**照抄即可**） |
 | 该特性由 **ZMK 创始人 Pete Johanson** 提需求（issue [#980](https://github.com/zmkfirmware/zmk/issues/980)），原文即「switch primary output, or BT profile」 | issue #980（2023-08-29 关闭，由 PR [#1305](https://github.com/zmkfirmware/zmk/pull/1305) 实现，2022-05-19 合入） |
