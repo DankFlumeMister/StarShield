@@ -116,6 +116,43 @@ SPDX-License-Identifier: Apache-2.0     （ESP-IDF 整体亦为 Apache-2.0）
 ⇒ **结论：保持「原版 ZMK + 三个模式都不刷固件」这条路，市面上没有现成适配器可替代，
 Dongle 固件必须自研。** 这是本项目一块**确定要投入的固件工作量**，不再有捷径。
 
+#### ✅ 但可以先用树莓派零成本验证整个构想（替代我上一版错误的「买适配器」建议）
+
+`quaxalber/bluetooth_2_usb` —— 树莓派（BlueZ + USB gadget），把蓝牙键鼠转成 USB HID。
+**89★、31 个 release、最新 v4.0.0**，是所有方案里成熟度最高的。
+它不是拇指大小的 Dongle（需要一台 Pi），但**非常适合在投入自研固件之前先验证整条架构**。
+
+#### 低延迟机制（有 ZMK 维护者的数字，但**均为计算值，非实测**）
+
+- ZMK 官方 Dongle 文档：加 Dongle 只多 *"about 1ms from the extra USB hop"*，
+  同时把一条 BLE 跳换成 USB 跳，使其余部分的平均延迟**下降 6.5 ms**。
+- ZMK 维护者 **Nicell** 在 issue #1265 给出：Dongle 模式平均约 **4.25 ms**
+  （0.5 ms USB @1000 Hz 轮询 + 3.75 ms BLE @7.5 ms 周期）。
+- **roba 的实际做法比「固定参数」更硬**：`main.c` 里 `BT_LE_CONN_PARAM_INIT(6, 6, 0, 400)`
+  （7.5 ms、latency 0），并且 `roba_le_param_req()` **直接拒绝**键盘的变慢请求
+  （`if (param->latency > 0 || param->interval_max > 6) return false;`）。
+  作者指出**键盘自己请求的是 15 ms / latency 30** ——
+  ⇒ **Dongle 是在强行覆盖键盘自身的省电偏好**。这是「两端可控」的具体机制。
+- ⚠️ **所有延迟数字都是计算或主观感受，没有任何项目公布过示波器/逻辑分析仪实测。**
+
+#### ⚠️ 一个会让人白掉头发的实现陷阱（来自 anisehid 的 ESP32 实践）
+
+ESP-IDF 的 `CONFIG_BT_GATTC_NOTIF_REG_MAX` **默认只有 5**，但
+*"many keyboards (Keychron K2 HE for example) register 8+ notification subscriptions;
+the IDF default of 5 silently drops the keyboard INPUT report subscription
+so no keystrokes flow."* ⇒ **必须调大（他用 16）。**
+这类「静默丢订阅、按键完全不响应」的坑在自研固件时必然要踩一遍，先记下来。
+
+#### 一条值得关注、但今天还不能用的路
+
+`tadakado/zmk-ble-mouse-host` 是一个 **ZMK 模块**，让**键盘自己**成为 BLE central + HOGP 主机，
+且其 Kconfig `select BT_CENTRAL / BT_OBSERVER / BT_GATT_CLIENT`，
+**不要求 `CONFIG_ZMK_SPLIT`** ⇒ **单体内键盘不存在 central/peripheral 的编译期冲突**。
+
+⇒ 这意味着理论上**可以不要 Dongle 那颗 MCU**：键盘自己就能当主机。
+**但目前只支持鼠标**（GAP appearance `0x3C2`），键盘版尚不存在，
+且这是一个真正的 ZMK 模块开发工作量。**记为后续版本的可能方向，第一版不采用。**
+
 **配对不是障碍**（一手核实，来自 ZMK 源码）：
 
 - ZMK 的 `app/Kconfig` 硬选 `BT_SMP_SC_PAIR_ONLY` ⇒ 要求 **LE Secure Connections**，
