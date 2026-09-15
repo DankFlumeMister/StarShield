@@ -57,30 +57,18 @@ _cacache/
 package-lock.json
 *.log
 
-# --- 调研临时抓取物（第三方页面/PDF/克隆的仓库/一次性脚本）---
-# 只保留结论性的 .md 报告
-research/pdf/
-research/pages/
-research/img/
-research/mosfet/
-research/npmcache/
-research/raw/
-research/real/
-research/dl/
-research/_web/
-research/_clones/
-research/*.pdf
-research/*.zip
-research/*.js
-research/*.mjs
-research/*.cjs
-research/*.json
-research/*.html
-research/*.txt
-research/*.raw
-research/*.kicad_sym
-research/*.kicad_mod
-research/*.pages.json
+# --- 调研工作区（第三方页面/PDF/克隆的仓库/图片/一次性脚本）---
+# 采用【白名单】策略：research/ 下只保留结论性的 .md 报告，其余一律不入库。
+# 为什么不用逐个后缀枚举：枚举必然漏（曾漏掉 *.png / *.py / 任意名字的克隆目录），
+# 而本仓库是公开的，漏一个就会把无许可证的第三方原理图/规范原文推上去。
+# 白名单策略下，新增任何临时产物都默认安全。
+research/*
+!research/*.md
+
+# --- 调研临时工作目录（工具/子代理的一次性产出）---
+.research/
+.zmk-research/
+_research/
 
 # --- Secrets / privacy ---
 *.env
