@@ -42,30 +42,79 @@ ZMK 官方文档描述的 dongle 做法是：Dongle 作为**分体键盘的 cent
 - ✅ 三条腿都是 BLE ⇒ 切模式**不需要整机重启**
   （对比：Keychron 的 2.4G 机型因两套射频栈互斥，切模式要 `app_system_reset()` 整机重启）。
 
-### Dongle 固件：**已有多个开源实现，键盘侧保持原版 ZMK 不改**
+### Dongle 固件：架构有先例，但**代码不能抄**（许可证问题）
 
-⚠️ 上一版把这里写成「待决：自己写还是买成品」并高估了成本。经调研，**这条架构不新颖，
-已被反复实现**，且全部满足我们的前提（键盘跑**未修改的**原版 ZMK）。
+⚠️ **本节曾写「不必从零写固件」——该结论是错的，已更正。**
 
-**最强先例：`hirosatosou/roba-ble-hid-bridge`**（Raytac MDBT50Q-CX-40 / nRF52840，NCS + Zephyr）
+**架构本身确已被实现**，且满足我们的前提（键盘跑**未修改的**原版 ZMK）：
+
+**最强先例：`hirosatosou/roba-ble-hid-bridge`**（nRF52840 + NCS/Zephyr）
 
 - README 原文（**已亲自核对**）：*"runs **unmodified** stock ZMK — all the work is in the dongle."*
-- 且**明确描述了我们设想的三档开关用法**：Dongle 只是*"just one host profile, allowing you to
+- 明确描述了我们设想的三档用法：Dongle 只是*"just one host profile, allowing you to
   switch between the dongle and direct BLE using `&bt BT_SEL`"*
-- Dongle 作 BLE central 连键盘 → 转 USB HID；带 bond 清除按钮（长按 3 s），
-  且文档指出**必须两端都清**（Dongle 按钮 + 键盘 `&bt BT_CLR`）
-- 自述优势：*"Deterministic low latency. The dongle is always the central and pins the [link]"*
+- 技术机制**已从作者的实际 `prj.conf` 逐行核实**：
+  ```c
+  CONFIG_BT_HOGP=y                          /* HID over GATT 客户端 */
+  CONFIG_BT_CENTRAL=y
+  CONFIG_BT_GAP_AUTO_UPDATE_CONN_PARAMS=n   /* 不采纳对端"想变慢"的请求 */
+  CONFIG_BT_USER_PHY_UPDATE=y               /* 显式请求 2M PHY */
+  CONFIG_USB_HID_POLL_INTERVAL_MS=1
+  ```
+  即：Dongle 作为 central 把连接间隔**钉在 7.5 ms（min=max=6）、slave latency 0**
+  并拒绝变慢请求 ⇒「两端都可控」这个低延迟机制是**真实存在且已实现**的。
+- ⚠️ 但作者只说 *"faster than direct BLE"* 是**主观感受，无测量数据、无方法学、无样本量**
+  ⇒ 标记 `❓ 未测量`，不得当作结论。
+- ⚠️ 已知限制（作者自述）：**Caps Lock 之类的 LED 输出报告无法转发**
+  （`CONFIG_ENABLE_HID_INT_OUT_EP=n`，没有中断 OUT 端点）；
+  当前硬编码适配 roBa 的报告描述；重新配对需**两端都清 bond**。
 
-**其他实现**（均已核对仓库存在与自述）：
+#### 🔴 致命细节：**没有一个是可抄的开源许可证**
 
-| 项目 | 硬件 | 备注 |
+| 项目 | 硬件 | 许可证 |
 | --- | --- | --- |
-| `ShiniNet/zmk-usb-bridge` | nRF52840 | 专为「ZMK 键盘 → 专用 USB 接收器」，**附对真机（LaLapadGen2）的验证日志** |
-| `anisehid/hid-proxy-for-ble-keyboard` | ESP32-C3 + CH9329 | ★29（最多星）。README 原文 *"Tested with: **ZMK-based keyboards**, Keychron K2 HE"* |
-| `lvntbkdmr/ble-to-hid` | **Seeed XIAO nRF52840** | 为无线 Corne 而写 —— **正好是 ADR-0001 原定的 Dongle 硬件** |
-| `mosquito/ble-hid-bridge` | ESP32-S3 | 最多同时接 4 个 BLE 外设，通用 HID Report Map 解析 |
+| `hirosatosou/roba-ble-hid-bridge` | nRF52840 | bridge 固件为 **`LicenseRef-Nordic-5-Clause`**（派生自 NCS `central_hids` 例程）；其 LICENSE 文件自述 *"**the Nordic 5-Clause license restricts the chip**"* |
+| `ShiniNet/zmk-usb-bridge` | nRF52840 | **未声明** |
+| `anisehid/hid-proxy-for-ble-keyboard` | ESP32-C3 + CH9329 | **未声明** |
+| `lvntbkdmr/ble-to-hid` | XIAO nRF52840 | **未声明** |
+| `mosquito/ble-hid-bridge` | ESP32-S3 | **未声明** |
 
-⇒ **不必从零写固件**，有多个可读、可改的现成实现，其中两个的硬件就是我们的候选。
+**未声明许可证 = 默认保留所有权利**，不能合法复制、修改或分发。
+⇒ **这些项目只能「参考思路」，代码必须自己写。**
+
+⚠️ 而且 Nordic-5-Clause **正是 ZMK 拒绝原生 2.4GHz 的同一条许可证**
+（见本 ADR 修订段末）。若 Dongle 固件也落在 NCS 上，本项目就会染上同一个问题：
+**Dongle 固件将不是开源许可**，与 CERN-OHL-S-2.0 的项目定位冲突。
+
+#### ✅ 许可证干净的实现路径：ESP32 + ESP-IDF 自带的 BLE HID Host
+
+**已核实**：ESP-IDF 的 `components/esp_hid` 自带 HID Host：
+
+```
+include/esp_hidh.h          HID Host API
+include/esp_hidh_gattc.h    BLE HID over GATT 客户端
+include/esp_hidh_nimble.h   NimBLE 后端
+SPDX-License-Identifier: Apache-2.0     （ESP-IDF 整体亦为 Apache-2.0）
+```
+
+⇒ 用 **ESP32-S3（原生 USB OTG）+ `esp_hidh`（BLE HID 客户端）+ TinyUSB（USB HID）**
+可以做出**全程 Apache-2.0** 的 Dongle，**绕开 Nordic 许可证**。
+代价是这份固件要自己写（工作量大头在 USB HID 描述符与连接参数固定上）。
+
+#### 成品适配器：**不存在通用型**（更正我上一版的建议）
+
+⚠️ 上一版写「可零成本先买成品适配器验证构想」——**该建议不成立**：
+
+- 通用「蓝牙转 USB」适配器这个品类**基本不存在 BLE HOGP 键盘版**；
+  经典品类是 **Classic BT（CSR BlueCore）+ `hid2hci.exe`**，不是 BLE。
+  （0xf8.org 2014 年的调查结论：这类适配器 *"next to impossible to find"*。）
+- `Handheld Scientific BT-500/600` 方向**相反**：把**有线**键鼠变成蓝牙，不是我们要的。
+- 唯一在售的相关产品是 **beekeeb 的 Prospector ZMK dongle**（约 ¥5,480），
+  但它走的是**分体 central 模式**（需要给键盘刷从机固件），
+  正是本节要避开的路线。**不是我们的方案。**
+
+⇒ **结论：保持「原版 ZMK + 三个模式都不刷固件」这条路，市面上没有现成适配器可替代，
+Dongle 固件必须自研。** 这是本项目一块**确定要投入的固件工作量**，不再有捷径。
 
 **配对不是障碍**（一手核实，来自 ZMK 源码）：
 
@@ -84,14 +133,18 @@ HOGP client 应当是 **module 而非核心**。另见仍开放的 #2885（运�
 
 ### 待决
 
-- ❓ **选哪个现成实现作为起点**（倾向 `roba-ble-hid-bridge`，理由最贴合且文档最全）。
-- ❓ **Dongle 硬件选型**：XIAO nRF52840（原 ADR 的选择，且有 `lvntbkdmr` 先例）
-  vs Raytac MDBT50Q-CX-40（roba 的选择）。
+- ❓ **Dongle 固件技术栈**：**倾向 ESP32-S3 + ESP-IDF `esp_hidh`**（全程 Apache-2.0，
+  避开 Nordic-5-Clause），代价是自研工作量；
+  vs nRF52840 + NCS（有 roBa 的完整机制可参考，但代码不能抄、且固件将是 Nordic 非开源许可）。
+- ❓ **Dongle 硬件选型**：ESP32-S3（原生 USB OTG，许可证干净）
+  vs Seeed XIAO nRF52840（ADR 原选择，且与键盘控制器同生态）。
+  ⇒ **该选择现在由许可证与技术栈决定，不再只是硬件偏好。**
 - ❓ `firmware/build.yaml` 中被注释掉的 Dongle 构建项需按本修订重新设计
   —— 注意 Dongle **不跑 ZMK**，因此它**不进 ZMK 的 build matrix**，
-  而是独立固件工程。
-- 💡 **可零成本先验证整个构想**：买一个现成的 BLE-HID→USB 适配器，
-  让键盘当普通蓝牙键盘连它，验证「Dongle 档」体验，再决定是否自制。
+  而是独立固件工程（若选 ESP32 则连工具链都不同）。
+- ❓ **Caps Lock 等 LED 输出报告无法经 Dongle 转发**（roBa 的限制来自
+  `CONFIG_ENABLE_HID_INT_OUT_EP=n`）。需确认这是否影响本项目的指示灯方案
+  —— 本项目的 Caps Lock 提示若由 ZMK 自身状态驱动则不受影响，**待核实**。
 
 > 本修订**不改变** ADR-0001 的核心决策（用 BLE Dongle 而非原生 2.4GHz 射频）。
 > 原生 2.4GHz 被否决的理由在本轮调研中**得到加强**：

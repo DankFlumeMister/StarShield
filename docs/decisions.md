@@ -15,9 +15,13 @@
 - **无线方式**：第一版走 BLE Dongle 路线——Body 作为 BLE peripheral，经独立 Dongle 连接主机。
   **Dongle 形态已收紧为「BLE HID 主机」**（不是 ZMK 官方的分体 central）——后者会让键盘
   离开 Dongle 即变砖，且失去蓝牙/有线两个模式。见 **ADR-0001 修订**。
-  ✅ **该架构已有多个开源实现，键盘侧保持原版 ZMK 不改**
-  （`roba-ble-hid-bridge`、`ShiniNet/zmk-usb-bridge`、`anisehid/hid-proxy`、
-  `lvntbkdmr/ble-to-hid`），**不必从零写 Dongle 固件**。
+  ✅ 该架构**已有先例**（`roba-ble-hid-bridge` 等，键盘侧保持原版 ZMK），
+  且已验证其低延迟机制（central 把连接间隔钉在 7.5 ms + 2M PHY）。
+  ⚠️ **但这些项目的代码一律不可抄**：roBa 的 bridge 固件是
+  `LicenseRef-Nordic-5-Clause`（且该许可**限制芯片**），其余项目**未声明许可证**。
+  ⇒ **Dongle 固件必须自研**；倾向 **ESP32-S3 + ESP-IDF `esp_hidh`**（Apache-2.0）
+  以避开 Nordic 许可证，代价是工作量。
+  ⚠️ 通用「蓝牙转 USB」适配器**不存在** BLE HOGP 键盘版，无捷径可走。
   配对走 Just Works + LESC，**不要开启** `CONFIG_ZMK_BLE_PASSKEY_ENTRY`。
 - **放弃真三模**：ZMK 不支持原生 2.4GHz 专有射频。⚠️ 本轮调研**加强了**这个决定：
   Keychron 的 2.4G 实现依赖**闭源二进制**（Nordic ESB 标注 `LicenseRef-Nordic-5-Clause`、
