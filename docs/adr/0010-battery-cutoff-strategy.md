@@ -24,9 +24,44 @@
 | 做法 | 实例数量 | 说明 |
 | --- | --- | --- |
 | **小开关直接串电池路径**（超额定使用） | **12+ 块板** | TOTEM、KOMETA、ZMK 硬件设计指南、Ladniy/TK44、yumagulovrn/dao-choc-ble、KLOR、KLOTZ、uninarf、chocopi、ergonautkb/one、chitin、Sweep Bling LP、taira |
-| **开关切 `BQ24075` 的 `SYSOFF`**（开关只走 µA） | **3 个独立实现** | ZMK 硬件设计指南、**kurtis-lew/Conejo**、**ebastler/osprey** |
+| **开关切 `BQ24075` 的 `SYSOFF`**（开关只走 µA） | **27+ 块板** | 详见下文「社区实现」；本文的参考电路是**事实标准** |
+| **直接把 `SYSOFF` 常接 GND**（放弃该功能） | **16 块板** | 含 `PumaFPV/PMK`（0 Ω）、`jncronin/gk`、**nice!nano v2** |
 | **P-FET 串电池主回路 + 小开关驱动栅极** | **0** | 核验到的电池侧 P-FET 栅极一律由 USB VBUS、MCU GPIO 或经 N-FET 驱动，**没有一个由拨动开关驱动** |
 | **集成负载开关 IC**（TPS22910 之类） | **0** | 30+ 仓库范围内未发现 |
+| 🔴 **「模式档位兼做电池断电」** | **0** | **本项目若实现，将是首例** —— 详见下 |
+
+#### 🔴 「一个开关同时管模式与电源」：**没有先例，我们会是第一个**
+
+这一条经过专门取证，结论分两半：
+
+- ✅ **「OFF 作为三档之一」是真实存在的出货形态**：**Keychron K2** 说明书原文即
+  `* BT OFF Cable (Mode Toggle Switch)`。
+- ❌ **但没有任何产品让「有线档」切断电池**：
+  - **Keychron K8 Max**（三模）说明书 p.18 原文：
+    *"The K8 Max can be charged in 2.4GHz/Cable/Bluetooth MODE (MODE TOGGLE) on."*
+    ⇒ **电池在三个档位（含有线档）下都是接通且可充电的**。
+    p.19：*"TURN OFF THE KEYBOARD — Switch the keyboard to the **Cable** option and
+    **unplug the power cable**."* ⇒ 它靠「有线档 + 拔线」实现关机，
+    但**电池并未因此断开**（只是没在充电/没在用）。
+  - 所有**真正断开电池**的设计用的都是**独立的开关**。最接近本 ADR 目标行为的是
+    **Aloidia**（[hackaday.io/189688](https://hackaday.io/project/189688)）：
+    作者用一颗独立 SPDT 切 `SYSOFF`，自述
+    *"when turned off, only the battery is disconnected, but the user can still use the
+    keyboard via USB."* —— **行为与本 ADR 完全一致，但是用第二颗开关实现的。**
+  - 最有意思的一条**反面证据**：某 **御斧 Y68** 评测者在文里主动表达了这个愿望 ——
+    「如果把有线模式同时定义成关机…要更方便一些」。
+    ⇒ 说明这个想法有需求，但**当时没有产品做到**。
+
+> ⚠️ **取证范围限制（必须记账）**：只有 **Keychron 与 Akko** 做到了说明书正文级核实；
+> Epomaker / RK / NuPhy / Lofree / Vortex / MonsGeek 等**未查**。
+> `fccid.io`、`fcc.report`、`apps.fcc.gov` 全部返回 403 ⇒
+> **没有任何一款商业产品的开关刀数被实物照片或原理图确认过**。
+> 说明书文本来自 manualslib 镜像而非厂商一手 PDF。
+> 有一条被评测者声称「合并了模式与电源」的机型（雷神 VIC84）**已被拆解照片推翻** ——
+> 它同时有 `BT5.0/2.4G/G` 开关、`WIN/MAC` 开关、**以及左侧一个独立的白色滑动开关**。
+
+⇒ **结论：本 ADR 的合并方案是novel的。** 这既是它的价值（更简洁），
+也是它的风险（没有可对照的成熟设计）。**第一版务必实测验证。**
 
 ### 关键量化事实
 
@@ -46,9 +81,11 @@
 我此前把「100 kΩ 上拉 vs NMOS 下拉」描述成需要解决的冲突。**这是错的**：
 
 - 100 kΩ 是**无源上拉**，NMOS 是**无源下拉** —— 二者构成**分压器**，不是两个源在对顶。
-- `V(SYSOFF) = 4.2 V × Rds(on) / (100 kΩ + Rds(on)) ≈` **84 µV**，
-  **比 `V_IL(max) = 0.4 V` 还低约 5000 倍** ⇒ NMOS 导通时 `SYSOFF` 稳稳定为低。
-- 漏电 ≈ 42 µA（经 100 kΩ）+ 0.84 µA（经内部 5 MΩ）⇒ 等效约 98 kΩ。
+- 用器件实测参数算（2N7002 `Rds(on)` 取 2.85 Ω 典型 / 9.25 Ω 最大 @150 °C；
+  等效上拉 = 100 kΩ ‖ 内部 5 MΩ ≈ 98.04 kΩ）：
+  `V(SYSOFF)` = **122 / 227 / 396 µV**（三种工况），
+  **对 `V_IL(max) = 0.4 V` 有约 1000×–3300× 余量** ⇒ 永远不会停在中间电平。
+- 代价：该状态漏电 **≈43 µA** —— 这就是「冲突」的全部成本，做预算时计入即可。
 
 #### 🔴 由此推出一条硬约束：`2N7002` 那颗「插 USB 强制拉低」的管子是**必须的，不是可选**
 
@@ -62,17 +99,69 @@ using the GPIO to keep the battery connected to the output for charging**."*
 
 `SYSOFF` **高 = ship mode / 断开电池 / 同时禁用充电** —— 与「开关拨到 ON 应该是高」的直觉相反。
 
-#### 社区实现远不止 3 个
+#### 社区实现（netlist 级核实，28 块板）
 
-用 `gh search code "SYSOFF" --extension kicad_sch` 扫到 **25+ 个项目**，其中键盘相关的包括：
-`zhiayang/mikoto`（全局标签 `CHARGE_CTRL_1/2`，逻辑电平充电控制）、
-`jncronin/gk`（`PWRCTRL1..3`、`PWR_WKUP1`）、
-`crides/fissure`（用 **`AO3400A`** 而非 `2N7002`，同拓扑不同件）、
-`ebastler/osprey`、`PumaFPV/PMK`、`rianadon/Cosmos-Keyboard-PCBs`、
-`kurtis-lew/Conejo`、`JonasLindinger/MicroPad`、`Spaceboards/SpaceboardsHardware` 等。
+用 `gh search code "SYSOFF" --extension kicad_sch` 扫到 28 块板，其中：
 
-⚠️ **未发现**任何项目在 MOSFET 漏极串电阻、加二极管、或采用其它冲突消解拓扑；
-**也未发现**任何「振荡/电平不定」的失效记录 ⇒ 该拓扑本身是稳的。
+- **27+ 块用本 ADR 这套标准电路**（`kurtis-lew/Conejo`、`willemml/unsplit6col`、
+  `SaidAlvarado/Key-B-hardware`、`kaievns/little-wing`、`acornitum/hackapet-v4`、
+  `hackclub/hackxpansion`、`Max585t/Every83`、`jaylin0131/Module-keyboard`、
+  `ebastler/osprey`、`crides/fissure`、`crides/btyp` 等）
+- **16 块直接把 `SYSOFF` 常接 GND**（含 `PumaFPV/PMK` 用 **0 Ω** 电阻、`jncronin/gk`）
+  —— 即放弃 SYSOFF 功能，与 **nice!nano v2** 的做法一致。
+
+**版本差异（供后续设计参考）**：
+
+| 变体 | 实例 | 说明 |
+| --- | --- | --- |
+| N-FET 换型 | `crides/fissure`、`crides/btyp` 用 **`AO3400A`**；`espcaa/mp3-player` 用 `BSS138` | 同拓扑不同件 |
+| 上拉电阻改 10 kΩ | `scottyob/nrf52840-uno`、`hackclub/hackxpansion`、`espcaa` | ⚠️ **代价：off+USB 态漏电约 420 µA（vs 100 kΩ 的约 42 µA）** |
+| 栅极从**别的节点**取 | ⭐ `EIectron/RadioNoob`：MMBT3904（NPN）**基极接充电器自己的 `~PGOOD`**；`espcaa` 用**肖特基二极管或**（按钮或 MCU GPIO 都能拉低）；Crazyflie 用 **MAX16054** 按钮控制 IC | 见下「PGOOD 的用法」 |
+| 由 **MCU GPIO 直驱** | ⭐ `keyboardio/Kaleidoscope` 的 `BQ24075.h`：`pinMode(sysoff_pin, OUTPUT)`，默认 LOW = 正常，`disconnectBattery(b)` → `digitalWrite(pin, b?HIGH:LOW)` | 合法（绝对最大 7 V），但**见下面的自举悖论** |
+| P 沟道 / PNP | **未发现任何一例** | 全用 N 沟道 |
+
+⚠️ **更正**：我上一轮把 `zhiayang/mikoto` 的 `CHARGE_CTRL_1/2` 与 `jncronin/gk` 的
+`PWRCTRL1..3` 当作 SYSOFF 实现 —— **两者均已被推翻**：
+mikoto 文件里唯一的 `SYSOFF` 字符串在**内嵌的库符号**里（无实际网络），其 `CHARGE_CTRL` 落在
+**`ISET`（pin 16）**；gk 的 `PWRCTRL` 在 **STPMIC25B** 上，且 gk 本身把 `SYSOFF` 接 GND。
+
+⚠️ **另外**：`u-mikhalenka/slicemk-module` 的 `zmk,behavior-sysoff` **不是** BQ24075 驱动，
+而是 nRF52 的 `SYSTEMOFF` 深度睡眠（命名撞车）。
+⇒ **ZMK 目前没有任何针对 BQ24075 `SYSOFF` 引脚的 devicetree binding。**
+
+#### 🔴 反模式警告：**绝不要把 `SYSOFF` 接到 `OUT` 轨**
+
+`rianadon/Cosmos-Keyboard-PCBs`（lemon-wireless-uc）里 `SW1` 的一档直接接 `VDDH`，
+而 **`VDDH` 就是该板 BQ24075 的 `OUT` 轨**（无电阻、无 MOSFET）⇒ 构成闭环：
+`SYSOFF` 拉高 → FET 断开 → `OUT` 跌落 → `SYSOFF` 跟着跌落 → 状态不定。
+
+**本项目必须把上拉接到电池轨（`BAT`/`+BATT`），绝不能接 `OUT`。**
+（参考设计的标注正是 `R3 100k → +BATT`，与此一致。）
+
+#### ⚠️ `SLUS810N` 对 `SYSOFF` **没有规定任何迟滞（hysteresis）或去抖（deglitch）**
+
+⇒ **绝不能让 `SYSOFF` 停在 0.4 V ~ 1.4 V 之间。** 上拉与下拉都必须给出明确电平
+（本设计的分压余量约 1000×–3300×，天然满足）。
+
+#### 🔴 真正的失效模式是「自举悖论」，TI 有文档 —— 这也正是本项目选机械开关的理由
+
+TI E2E 论坛 1170884 附带客户文档原文：
+
+> *"to pull down the SYSOFF to LOW to enable the connection of battery to load,
+> **we need the power to the microcontroller**. Unless the microcontroller pulls the SYSOFF to LOW,
+> the BQ24075 doesn't connect the battery to the Load."*
+
+**即：MCU 由 `SYSOFF` 控制的那条轨供电，却又必须靠 MCU 去拉低 `SYSOFF` —— 死锁。**
+这是一个**循环依赖**，不是电气问题。
+
+TI 的解法（`SLUAA18` §3/§4）：**用一个按钮把 `SYSOFF` 直接短到 GND，绕开 MCU。**
+
+⇒ ✅ **这条独立印证了本 ADR 对「方式 2」的判断**（我此前推导出的「启动死锁」），
+并给出结论：**永远不要让 MCU GPIO 成为拉低 `SYSOFF` 的唯一通路。**
+**本项目的三档机械开关正是那个不依赖 MCU 的通路 —— 架构方向正确。**
+
+> 💡 若固件想知道 USB 是否在位（例如在界面上提示「关机档下插线不充电」），
+> TI 建议读 **`PGOOD`**：*"The PGOOD pin can be used to determine when the input is present or absent."*
 
 ## 各方案评估
 
@@ -81,7 +170,6 @@ using the GPIO to keep the battery connected to the output for charging**."*
 > 方案丁（自建 P-FET 负载开关）因零先例被否决。
 
 ### 甲：不加电池开关，改用 ZMK `&soft_off` + 存放时拔 JST
-
 - ZMK 官方把 soft-off 定义为 *"an alternative to using a hardware switch to physically cut power"*，
   功耗 *"comparable to the deep sleep state"*；**也明确说了** *"Power is **not** technically removed from the entire system"*。
 - **零硬件成本、零超额定问题**；代价是「关机」后仍有约 20 µA 级漏电，且**不是电气断开**。
