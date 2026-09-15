@@ -1,0 +1,12 @@
+# 统一按 LF 存储，避免跨平台行尾漂移
+* text=auto eol=lf
+
+# 二进制文件不做行尾转换
+*.png binary
+*.jpg binary
+*.gif binary
+*.pdf binary
+*.stl binary
+*.step binary
+*.3mf binary
+*.kicad_pcb binary

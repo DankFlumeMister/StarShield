@@ -1,0 +1,159 @@
+/*
+ * StarShield — 95 键无线机械键盘，ZMK shield 配置
+ *
+ * 目标板：nice!nano v2（nRF52840）
+ * 矩阵：6 行 × 18 列，95 键，每个键一颗 1N4148W 二极管，col2row
+ * 列驱动：2 颗 74HC595 级联（ZMK 官方 zmk,gpio-595 驱动）
+ * RGB：95 颗 SK6812MINI-E，数据链首颗数据线走 spi3（ZMK 官方做法）
+ *
+ * ⚠️ 引脚分配依据（见 docs/matrix-folding-analysis.md §4 与 docs/power-architecture.md）：
+ *   - 官方要求：移位寄存器只能当【输出】，MCU【输入】脚必须直连
+ *     （为保留按键唤醒中断）→ col2row 下【列走 595、行直连 MCU】
+ *   - 官方要求：595 的 ngpios 只能取 8/16/24/32 → 18 列需 2 颗级联、取 24
+ *   - 595 与 WS2812 必须用【不同】SPI 外设（两者都是 SPI 从设备）
+ *       595   → &spi1（MOSI P0.10 / SCK P1.13 / MISO P1.11）
+ *       WS2812 → &spi3（MOSI P0.06）
+ *   - P0.13 是 nice!nano 的 VCC 门控脚（置高切断 VCC），官方就是这么省 LED 静态功耗的
+ *
+ * ⚠️ 本文件为设计稿：引脚分配已在 DTS 层面自洽，但【投板前必须用实物核对】
+ *    （nice!nano 的排针 pitch/每边脚数未能从官方数字确认，仅有 Pro Micro 标准旁证）。
+ */
+
+#include <dt-bindings/led/led.h>
+#include <dt-bindings/zmk/matrix_transform.h>
+
+/* 键位映射表（自动生成，内容为 &default_transform { columns/rows/map }） */
+#include "starshield_transform.dtsi"
+
+/ {
+    chosen {
+        zmk,kscan = &kscan0;
+        zmk,underglow = &led_strip;
+        /* ⚠️ ZMK 已迁移到 physical-layout 模型（官方 docs/hardware-integration/physical-layouts.md）：
+           旧式 `zmk,matrix-transform = &default_transform` 不再使用，
+           改为指向 physical_layout0（它聚合 kscan + transform + 按键物理位置）。
+           physical_layout0 与 default_transform 定义在 starshield_transform.dtsi。 */
+        zmk,physical-layout = &physical_layout0;
+    };
+
+    kscan0: kscan_0 {
+        compatible = "zmk,kscan-gpio-matrix";
+        label = "KSCAN";
+        diode-direction = "col2row";
+
+        /*
+         * 6 个行：直连 MCU（输入，可触发中断）。
+         * 用 &pro_micro N 引用 Pro Micro 排针号，而不是裸 gpio 控制器，
+         * 这样换了板子（只要兼容 Pro Micro）不用改这里。
+         */
+        row-gpios
+            = <&pro_micro 4  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>   /* P0.22  D4/A6 */
+            , <&pro_micro 5  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>   /* P0.24  D5    */
+            , <&pro_micro 6  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>   /* P1.00  D6/A7 */
+            , <&pro_micro 7  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>   /* P0.11  D7    */
+            , <&pro_micro 9  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>   /* P1.06  D9/A9 */
+            , <&pro_micro 8  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>   /* P1.04  D8/A8 */
+            ;
+
+        /*
+         * 18 个列：全部由 2 颗级联的 74HC595 驱动（MCU 输出）。
+         * ngpios = 24 → 引脚号 0..17 有效，其中 0..7 在第一颗、8..15 在第二颗、
+         * 16..23 为第二颗的空闲输出（可留作扩展）。
+         */
+        col-gpios
+            = <&shifter  0 GPIO_ACTIVE_HIGH>
+            , <&shifter  1 GPIO_ACTIVE_HIGH>
+            , <&shifter  2 GPIO_ACTIVE_HIGH>
+            , <&shifter  3 GPIO_ACTIVE_HIGH>
+            , <&shifter  4 GPIO_ACTIVE_HIGH>
+            , <&shifter  5 GPIO_ACTIVE_HIGH>
+            , <&shifter  6 GPIO_ACTIVE_HIGH>
+            , <&shifter  7 GPIO_ACTIVE_HIGH>
+            , <&shifter  8 GPIO_ACTIVE_HIGH>
+            , <&shifter  9 GPIO_ACTIVE_HIGH>
+            , <&shifter 10 GPIO_ACTIVE_HIGH>
+            , <&shifter 11 GPIO_ACTIVE_HIGH>
+            , <&shifter 12 GPIO_ACTIVE_HIGH>
+            , <&shifter 13 GPIO_ACTIVE_HIGH>
+            , <&shifter 14 GPIO_ACTIVE_HIGH>
+            , <&shifter 15 GPIO_ACTIVE_HIGH>
+            , <&shifter 16 GPIO_ACTIVE_HIGH>
+            , <&shifter 17 GPIO_ACTIVE_HIGH>
+            ;
+    };
+
+    /*
+     * RGB 电源门控（ZMK ext-power）。
+     *
+     * ⚠️ 节点名必须是 EXT_POWER，否则用户已保存的设置会丢失（ZMK 官方文档明确要求）。
+     *
+     * nice!nano v2 官方用 P0.13 控制 VCC 通断，极性为 GPIO_ACTIVE_HIGH：
+     *   active（高）= 打开外设电源；inactive（低）= 切断
+     *
+     * ⚠️ 本项目的 LED 由电池直供（ADR-0007），因此【不是】直接拿 P0.13 去开关 VCC，
+     *    而是用 P0.13 驱动 §5.4 的 NMOS 反相级（2N7002 + AO3401A）。
+     *    反相级之后逻辑非反相，所以这里仍然是 GPIO_ACTIVE_HIGH。
+     *    （若改用直接驱动 PMOS 且带栅源上拉的拓扑，则应改为 GPIO_ACTIVE_LOW。）
+     */
+    EXT_POWER {
+        compatible = "zmk,ext-power-generic";
+        control-gpios = <&pro_micro 10 GPIO_ACTIVE_HIGH>;   /* P0.09 → 反相级 → LED 轨 */
+        init-delay-ms = <50>;
+    };
+};
+
+/* 595 走 spi1（与 WS2812 的 spi3 分开，避免两个 SPI 从设备冲突） */
+&spi1 {
+    status = "okay";
+    /* 片选：595 的 RCLK/锁存脚。用一个空闲的 Pro Micro 脚 */
+    cs-gpios = <&pro_micro 19 GPIO_ACTIVE_LOW>;             /* P0.02  D19/A1 */
+
+    shifter: sr595@0 {
+        compatible = "zmk,gpio-595";
+        status = "okay";
+        gpio-controller;
+        #gpio-cells = <2>;
+        reg = <0>;
+        spi-max-frequency = <200000>;
+        ngpios = <24>;      /* 2 颗 74HC595 级联；只能是 8/16/24/32 */
+    };
+};
+
+/* WS2812 数据链走 spi3（ZMK 官方对 nRF52 的推荐做法，见官方 underglow 文档） */
+&pinctrl {
+    spi3_default: spi3_default {
+        group1 {
+            psels = <NRF_PSEL(SPIM_MOSI, 0, 6)>;            /* P0.06  (Pro Micro D1) */
+        };
+    };
+
+    spi3_sleep: spi3_sleep {
+        group1 {
+            psels = <NRF_PSEL(SPIM_MOSI, 0, 6)>;
+            low-power-enable;
+        };
+    };
+};
+
+&spi3 {
+    compatible = "nordic,nrf-spim";
+    status = "okay";
+
+    pinctrl-0 = <&spi3_default>;
+    pinctrl-1 = <&spi3_sleep>;
+    pinctrl-names = "default", "sleep";
+
+    led_strip: ws2812@0 {
+        compatible = "worldsemi,ws2812-spi";
+
+        reg = <0>;                      /* 必须存在，SPI 绑定要求 */
+        spi-max-frequency = <4000000>;
+
+        chain-length = <95>;            /* StarShield = 95 颗 per-key LED */
+        spi-one-frame = <0x70>;
+        spi-zero-frame = <0x40>;
+
+        /* SK6812MINI-E 为 GRB 顺序 */
+        color-mapping = <LED_COLOR_ID_GREEN LED_COLOR_ID_RED LED_COLOR_ID_BLUE>;
+    };
+};

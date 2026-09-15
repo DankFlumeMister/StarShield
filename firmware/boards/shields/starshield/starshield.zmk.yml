@@ -1,0 +1,9 @@
+file_format: "1"
+id: starshield
+name: StarShield
+type: shield
+url: https://github.com/StarShield
+requires: [pro_micro]
+features:
+  - keys
+  - underglow

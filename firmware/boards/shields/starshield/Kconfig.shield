@@ -1,0 +1,7 @@
+# StarShield shield 注册
+#
+# 让 `-DSHIELD=starshield` 能被 ZMK 构建系统识别。
+# 参考 ZMK 官方 shield 的 Kconfig.shield 写法（如 app/boards/shields/corne/Kconfig.shield）。
+
+config SHIELD_STARSHIELD
+    def_bool $(shields_list_contains,starshield)

@@ -1,0 +1,28 @@
+# StarShield 固件的 west 清单
+#
+# 作用：ZMK 的构建工作流会先执行 `west init -l <config 目录>`，
+#       该命令**要求被初始化的目录里存在 west.yml**，否则报
+#       「FATAL ERROR: can't init: no west.yml found」并直接失败。
+#       （本项目首次 CI 构建即因此失败，已修复。）
+#
+# 结构参照 ZMK 官方 config 模板：
+#   https://github.com/zmkfirmware/zmk-config-template/blob/main/config/west.yml
+#
+# ⚠️ revision 已钉住 **v0.3.0** 而不是 `main`，原因：
+#   1. ZMK 在 v0.3 之后把板级定义从 `app/boards/arm/` 迁到
+#      `app/module/boards/<vendor>/`，board id 也随之从 `nice_nano_v2`
+#      变为 `nice_nano//zmk`。跟 main 会随时因破坏性变更而构建失败。
+#   2. 本项目是给新手复刻的，教程里的构建步骤不能随上游漂移。
+#   变更 ZMK 版本时，必须同步检查 firmware/build.yaml 里的 board 名。
+
+manifest:
+  remotes:
+    - name: zmkfirmware
+      url-base: https://github.com/zmkfirmware
+  projects:
+    - name: zmk
+      remote: zmkfirmware
+      revision: v0.3.0
+      import: app/west.yml
+  self:
+    path: config

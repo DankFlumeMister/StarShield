@@ -1,0 +1,99 @@
+# --- OS ---
+Thumbs.db
+Desktop.ini
+.DS_Store
+ehthumbs.db
+
+# --- Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- KiCad ---
+*.lck
+*.kicad_prl
+*-backups/
+fp-info-cache
+*.bak
+*.kicad_pcb-bak
+*.sch-bak
+_autosave-*
+
+# --- Build outputs ---
+build/
+*.uf2
+*.hex
+*.bin
+*.elf
+*.map
+*.o
+*.d
+
+# --- ZMK / Zephyr ---
+.zmk/
+.zephyr/
+
+# --- 3D printing (slicer outputs) ---
+*.gcode
+*.3mf
+
+# --- Python (helper scripts) ---
+__pycache__/
+*.pyc
+
+# --- 根目录下的一次性临时脚本（用 _ 前缀；正式脚本放 docs/_tools/）---
+/_*.mjs
+/_*.cjs
+/_*.js
+/_*.py
+/_*.txt
+
+# --- Node / JS dependencies & caches（绝不入库）---
+node_modules/
+npmcache/
+_cacache/
+package-lock.json
+*.log
+
+# --- 调研临时抓取物（第三方页面/PDF/克隆的仓库/一次性脚本）---
+# 只保留结论性的 .md 报告
+research/pdf/
+research/pages/
+research/img/
+research/mosfet/
+research/npmcache/
+research/raw/
+research/real/
+research/dl/
+research/_web/
+research/_clones/
+research/*.pdf
+research/*.zip
+research/*.js
+research/*.mjs
+research/*.cjs
+research/*.json
+research/*.html
+research/*.txt
+research/*.raw
+research/*.kicad_sym
+research/*.kicad_mod
+research/*.pages.json
+
+# --- Secrets / privacy ---
+*.env
+secrets/
+personal/
+private/
+
+# --- 内部文件（不随开源仓库发布）---
+PROJECT_HANDOFF.md
+docs/_internal/
+
+# --- 第三方参考源（无许可证，仅本地学习，不入库）---
+hardware/pcb/reference/
+
+# --- 调研临时工作区（抓取的第三方页面/PDF/一次性脚本，不入库）---
+_jst/

@@ -1,0 +1,31 @@
+# StarShield 固件构建矩阵
+#
+# 用法：由 .github/workflows/build.yml 读取，为每一项产出一个固件。
+#
+# ⚠️ board 名称随 ZMK 分支不同（已核实 docs/controller-and-battery-facts.md）：
+#     - ZMK `v0.3` release 分支（本文件当前采用）：`nice_nano_v2`
+#     - ZMK `main` 分支：改用 `nice_nano//zmk`（无 `nice_nano_v2`）
+#   若切换分支后构建报「board not found」，先检查这一点。
+#
+# 产物命名：artifact_name 省略时会自动拼成 `<shield>-<board>-zmk`
+
+---
+# 说明：任何改动 firmware/ 的提交都会触发 .github/workflows/build.yml
+include:
+  # ── 键盘本体（Body）─────────────────────────────────────
+  - board: nice_nano_v2
+    shield: starshield
+    artifact-name: starshield-body
+
+  # ── USB Dongle（BLE central）────────────────────────────
+  # 🔴 暂未启用：Dongle 需要 Seeed XIAO nRF52840 的 central 端 ZMK 配置
+  #    （BLE central + HID 转发），尚未设计。启用前请先补齐该 shield 配置。
+  #    Seeed XIAO nRF52840 在 ZMK 中的 board id 也需先行核实。
+  # - board: seeeduino_xiao_ble
+  #   shield: starshield_dongle
+  #   artifact-name: starshield-dongle
+
+  # ── 软复位 / 刷机辅助（可选，便于量产与救砖）──────────────
+  - board: nice_nano_v2
+    shield: settings_reset
+    artifact-name: starshield-settings-reset

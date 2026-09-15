@@ -1,0 +1,175 @@
+# StarShield 固件构建（GitHub Actions）
+#
+# 与 ZMK 标准 user-config 仓库的差别：本项目的固件不放在仓库根目录的 config/，
+# 而是放在 firmware/ 下（与硬件设计同仓）。因此这里显式设置 ZMK_CONFIG，
+# 并只把 firmware/ 复制进 west 工作区，避免 ZMK 去扫整个硬件仓库。
+#
+# 构建环境用 ZMK 官方容器镜像 zmkfirmware/zmk-build-arm:stable，
+# 与 ZMK 官方 build-user-config.yml 一致。
+#
+# 失败时只收集诊断产物（.config / zephyr.dts / 生成的头文件），不刷屏日志。
+#
+# ❓ 本工作流沿用 ZMK 官方可复用工作流的逻辑。ZMK 版本由 firmware/west.yml 钉死在
+#    v0.3.0，因此上游改动不会让它无声失效。
+#    ⚠️ 升级 ZMK 时必须回头核对 firmware/build.yaml 里的 board 名：
+#       v0.3.0 是 app/boards/arm/nice_nano/，board id = nice_nano_v2；
+#       上游 main 已迁到 module 形式的板定义，board id = nice_nano//zmk。
+#       （具体从哪个版本开始变的尚未核实，升级时以实际 checkout 为准。）
+
+name: Build firmware
+
+on:
+  push:
+    paths:
+      - "firmware/**"
+      - ".github/workflows/build.yml"
+  pull_request:
+    paths:
+      - "firmware/**"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+
+jobs:
+  matrix:
+    runs-on: ubuntu-22.04
+    name: 读取构建矩阵
+    outputs:
+      build_matrix: ${{ steps.fetch.outputs.build_matrix }}
+      has_valid: ${{ steps.fetch.outputs.has_valid }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 读取 firmware/build.yaml
+        id: fetch
+        run: |
+          content=$(yq -oj -I0 'firmware/build.yaml')
+          if [ -z "$content" ] || [ "$content" = "null" ]; then
+            echo "has_valid=false" >> $GITHUB_OUTPUT
+            echo "::notice file=firmware/build.yaml,title=空构建矩阵::firmware/build.yaml 没有可构建项"
+          else
+            echo "build_matrix=$content" >> $GITHUB_OUTPUT
+            echo "has_valid=true" >> $GITHUB_OUTPUT
+            echo "$content"
+          fi
+
+  build:
+    runs-on: ubuntu-latest
+    needs: matrix
+    if: needs.matrix.outputs.has_valid == 'true'
+    container:
+      image: zmkfirmware/zmk-build-arm:stable
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix.outputs.build_matrix) }}
+    name: 构建 ${{ matrix.shield }} / ${{ matrix.board }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备工作区
+        shell: bash
+        run: |
+          set -e
+          # 把固件目录复制到独立的 west 工作区，只暴露 firmware/
+          ws="${RUNNER_TEMP}/zmk-ws"
+          mkdir -p "${ws}/config"
+          cp -R firmware/. "${ws}/config/"
+          echo "ws=${ws}" >> $GITHUB_ENV
+
+          # 产物名：优先用 matrix.artifact-name，否则按 ZMK 惯例拼接
+          board="${{ matrix.board }}"
+          out="${{ matrix.artifact-name }}"
+          if [ -z "$out" ]; then out="${{ matrix.shield }}-${board//\//_}-zmk"; fi
+          echo "artifact_name=${out}" >> $GITHUB_ENV
+
+          # 组装 west build 参数
+          extra=""
+          if [ -n "${{ matrix.snippet }}" ]; then extra="-S ${{ matrix.snippet }}"; fi
+          echo "extra_west_args=${extra}" >> $GITHUB_ENV
+          echo "cmake_args=-DZMK_CONFIG=${ws}/config ${{ matrix.cmake-args }}" >> $GITHUB_ENV
+
+      - name: west init
+        working-directory: ${{ env.ws }}
+        run: west init -l "${ws}/config"
+
+      - name: west update
+        working-directory: ${{ env.ws }}
+        run: west update --fetch-opt=--filter=tree:0
+
+      - name: west zephyr-export
+        working-directory: ${{ env.ws }}
+        run: west zephyr-export
+
+      - name: 构建
+        working-directory: ${{ env.ws }}
+        shell: bash
+        run: |
+          set -x
+          west build -s zmk/app -d "${ws}/build" -b "${{ matrix.board }}" \
+            ${{ env.extra_west_args }} \
+            -- ${{ env.cmake_args }} \
+            -DSHIELD="${{ matrix.shield }}"
+
+      # 只在失败时收集诊断信息 —— 全量 dump .config / zephyr.dts 会淹掉日志，
+      # 这里只挑排查设备树使能问题真正要看的几项。
+      - name: 失败诊断（Kconfig 开关与设备注册）
+        if: failure()
+        working-directory: ${{ env.ws }}
+        run: |
+          cfg=build/zephyr/.config
+          if [ -f "$cfg" ]; then
+            echo "--- 驱动开关（缺一个就可能在链接期报 __device_dts_ord_N 未定义）---"
+            grep -E '^CONFIG_(WS2812_STRIP|LED_STRIP|SPI|GPIO_595|ZMK_RGB_UNDERGLOW|ZMK_EXT_POWER)' "$cfg" || echo "（无）"
+            echo "--- nRFX SPIM 实例 ---"
+            grep -E '^CONFIG_NRFX_SPIM' "$cfg" || echo "（无）"
+          else
+            echo "（无 .config：失败发生在 Kconfig 阶段之前）"
+          fi
+          if [ -f build/zephyr/zephyr.dts ]; then
+            echo "--- ws2812 / 595 节点 ---"
+            grep -n -A2 -E 'ws2812@|sr595@' build/zephyr/zephyr.dts | head -40
+          fi
+
+      - name: 失败时上传诊断产物
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-${{ env.artifact_name }}
+          path: |
+            ${{ env.ws }}/build/zephyr/zephyr.dts
+            ${{ env.ws }}/build/zephyr/.config
+            ${{ env.ws }}/build/zephyr/include/generated/autoconf.h
+            ${{ env.ws }}/build/zephyr/include/generated/devicetree_generated.h
+          if-no-files-found: warn
+
+      - name: 收集产物
+        shell: bash
+        run: |
+          set -x
+          mkdir -p "${ws}/artifacts"
+          if [ -f "${ws}/build/zephyr/zmk.uf2" ]; then
+            cp "${ws}/build/zephyr/zmk.uf2" "${ws}/artifacts/${artifact_name}.uf2"
+          elif [ -f "${ws}/build/zephyr/zmk.bin" ]; then
+            cp "${ws}/build/zephyr/zmk.bin" "${ws}/artifacts/${artifact_name}.bin"
+          else
+            echo "::error::未找到固件产物"
+            exit 1
+          fi
+          ls -la "${ws}/artifacts"
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifact-${{ env.artifact_name }}
+          path: ${{ env.ws }}/artifacts
+
+  merge:
+    runs-on: ubuntu-latest
+    needs: [matrix, build]
+    if: needs.matrix.outputs.has_valid == 'true'
+    name: 合并产物
+    steps:
+      - uses: actions/upload-artifact/merge@v4
+        with:
+          name: starshield-firmware
+          pattern: artifact-*
+          delete-merged: true

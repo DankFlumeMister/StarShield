@@ -1,0 +1,11 @@
+# StarShield shield 默认配置
+#
+# 参考 ZMK 官方 shield 的 Kconfig.defconfig 写法。
+# 仅在此设置【必须】随 shield 一起生效的项；其余放进 starshield.conf。
+
+if SHIELD_STARSHIELD
+
+config ZMK_KEYBOARD_NAME
+    default "StarShield"
+
+endif
