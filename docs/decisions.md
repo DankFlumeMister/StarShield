@@ -100,6 +100,29 @@
 
 - **开源许可证**：CERN-OHL-S-2.0（强互惠开源硬件许可证）。衍生产品必须同样开源并公开完整设计文件。
 
+## 固件
+
+- **三档模式开关读取**：用 ZMK 上游原生机制 —— `zmk,kscan-gpio-direct` 的 `toggle-mode`
+  + `zmk,kscan-sideband-behaviors`（`auto-enable`），**键盘侧零自定义固件**。见 ADR-0009。
+- **`CONFIG_ZMK_USB_BOOT=y` 开启**：让有线模式支持 BIOS/Boot Protocol。零成本，
+  顺带消除「必须靠 Dongle 才能进 BIOS」这一伪需求。
+- **加 `&soft_off` 绑定**：提供「立刻关机」而不必等 15 分钟空闲深睡。ZMK 原生、零硬件成本。
+- **Dongle 固件**：**ESP32-S3 + ESP-IDF 官方示例**（`esp_hid_host` + `tusb_hid`，均 Apache-2.0）。
+  ⚠️ **不移植任何第三方 Dongle 工程** —— 小尺寸的几个实现全部无许可证或 Nordic-5-Clause 限制，
+  抄了会破坏 CERN-OHL-S 许可链。见 **ADR-0011**。
+- **Dongle 侧注意事项**：`CONFIG_BT_GATTC_NOTIF_REG_MAX` 必须调大（默认 5 会静默丢弃
+  键盘的 INPUT report 订阅）；配对走 Just Works，**不要开** `CONFIG_ZMK_BLE_PASSKEY_ENTRY`。
+
+## 已决定的其他事项（2026-09）
+
+- **RGB 门控拓扑**：`2N7002` + `AO3401A` 反相级、`GPIO_ACTIVE_HIGH`，**照抄 `kurtis-lew/Conejo`**
+  （不要照抄 ZMK 硬件设计指南的 Q3，它 S/D 画反了）。见 ADR-0005。
+- **模式开关料号**：**`C&K PCM13`**（KiCad 官方封装 `SW_SP3T_PCM13` 现成）。
+  ⚠️ 禁用 E-Switch `EG1312AR`（第三档是瞬时的）。见 ADR-0009。
+- **充电 IC 保持 `BQ24072`**（不换 `BQ24075`，不需要 `2N7002`）。见 ADR-0002 修订。
+- **SuperMini 降级为「焊盘兼容、不保证」**：电池 ADC 脚冲突且不被 ZMK 官方支持，
+  第一版只保证 nice!nano v2。见 ADR-0003 修订。
+
 ## 待定
 
 - **具体电池型号与尺寸**（决定外壳电池仓）。已缩小到 3 条尺寸路线并给出推荐：

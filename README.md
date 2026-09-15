@@ -69,7 +69,7 @@ Dongle 插在主机上，从而获得接近 2.4GHz 的无线体验。硬件设�
 | 文档 | 内容 |
 | --- | --- |
 | [`docs/decisions.md`](docs/decisions.md) | 完整决策日志 |
-| [`docs/adr/`](docs/adr/) | 架构决策记录 0001–0010 |
+| [`docs/adr/`](docs/adr/) | 架构决策记录 0001–0011 |
 | [`docs/hardware-geometry.md`](docs/hardware-geometry.md) | 键位几何基准（含一次错误测量的教训） |
 | [`docs/matrix-assignment.md`](docs/matrix-assignment.md) | 95 键矩阵行列分配 + 网表校验 |
 | [`docs/matrix-folding-analysis.md`](docs/matrix-folding-analysis.md) | 为什么必须用移位寄存器（含引脚预算推导） |
@@ -86,7 +86,7 @@ Dongle 插在主机上，从而获得接近 2.4GHz 的无线体验。硬件设�
 ```text
 .
 ├── docs/                     设计文档、决策记录、生成/校验脚本
-│   ├── adr/                  架构决策记录 0001–0008
+│   ├── adr/                  架构决策记录 0001–0011
 │   ├── _tools/               可复现的生成与校验脚本
 │   └── _generated/           脚本产物
 ├── firmware/                 ZMK 固件配置

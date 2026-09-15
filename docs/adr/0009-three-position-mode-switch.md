@@ -141,7 +141,7 @@ ADR-0010 决定**不设电池断电**，因此本开关**只需单刀**，不用
 
 | 候选 | 规格 | 采购 / 封装 |
 | --- | --- | --- |
-| **C&K `PCM13` / `PCM13SMTR`** ✅ **首选** | SP3T，0.3 A @ 6 V，SMD 直角，本体 **9.7 × 2.55 mm**，4 pad @1.5 mm 间距 | ✅ **KiCad 官方库自带封装 `SW_SP3T_PCM13`** ⇒ 省掉画封装 |
+| **C&K `PCM13` / `PCM13SMTR`** ✅ **已选定** | SP3T，0.3 A @ 6 V，SMD 直角，本体 **9.7 × 2.55 mm**，4 pad @1.5 mm 间距 | ✅ **KiCad 官方库自带封装 `SW_SP3T_PCM13`** ⇒ 省掉画封装 |
 | Alps `SSSS213800` | SMD 回流焊，13.0 × 3.5 × 3.5 mm，0.3 A 6 V，10000 次，−40…+85 °C | LCSC **C361168**；有出货产品 BOM 实证（`ademuri/open-motion-light`），社区封装亦有 |
 | C&K `OS103012MU1QP1` | SP3T，THT，本体 6 × 17 × 12.2 mm | ✅ KiCad 官方封装 `SW_Slide_SP3T_Straight_CK_OS103012MU1QP1` |
 | C&K `AYZ0103AGRLC` | SP3T，0.1 A 12 V | LCSC C221563；⚠️ LCSC 标注的「宽 1.3 mm」不合常理（疑为高度）⇒ 尺寸视为未知 |
