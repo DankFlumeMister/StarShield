@@ -15,6 +15,10 @@
 - **无线方式**：第一版走 BLE Dongle 路线——Body 作为 BLE peripheral，经独立 Dongle 连接主机。
   **Dongle 形态已收紧为「BLE HID 主机」**（不是 ZMK 官方的分体 central）——后者会让键盘
   离开 Dongle 即变砖，且失去蓝牙/有线两个模式。见 **ADR-0001 修订**。
+  ✅ **该架构已有多个开源实现，键盘侧保持原版 ZMK 不改**
+  （`roba-ble-hid-bridge`、`ShiniNet/zmk-usb-bridge`、`anisehid/hid-proxy`、
+  `lvntbkdmr/ble-to-hid`），**不必从零写 Dongle 固件**。
+  配对走 Just Works + LESC，**不要开启** `CONFIG_ZMK_BLE_PASSKEY_ENTRY`。
 - **放弃真三模**：ZMK 不支持原生 2.4GHz 专有射频。⚠️ 本轮调研**加强了**这个决定：
   Keychron 的 2.4G 实现依赖**闭源二进制**（Nordic ESB 标注 `LicenseRef-Nordic-5-Clause`、
   Realtek 预编译库），ZMK 官方 FAQ 亦以**许可证**理由明确拒绝。

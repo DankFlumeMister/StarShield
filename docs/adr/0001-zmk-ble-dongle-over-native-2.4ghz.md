@@ -35,20 +35,63 @@ ZMK 官方文档描述的 dongle 做法是：Dongle 作为**分体键盘的 cent
 **代价（必须记账）**：
 
 - ⚠️ **ZMK 没有 HID 主机能力** —— 源码中搜不到 `hog_client` / `BT_HIDS_CLIENT`。
-  因此 **Dongle 固件不是 ZMK，是独立的固件项目**。
-  这把「零固件开发」的初衷改成了「一块额外的固件工作量」。
+  因此 **Dongle 固件不是 ZMK，是独立的固件工程**（不进 ZMK 的 build matrix）。
+  ✅ **但不必从零写** —— 已有至少 4 个开源实现可读可改，详见下节。
 - ✅ **收益**：键盘**离开 Dongle 仍可用**（蓝牙 / 有线两档），
   消除了原方案「丢 Dongle 即变砖」的风险。
 - ✅ 三条腿都是 BLE ⇒ 切模式**不需要整机重启**
   （对比：Keychron 的 2.4G 机型因两套射频栈互斥，切模式要 `app_system_reset()` 整机重启）。
 
+### Dongle 固件：**已有多个开源实现，键盘侧保持原版 ZMK 不改**
+
+⚠️ 上一版把这里写成「待决：自己写还是买成品」并高估了成本。经调研，**这条架构不新颖，
+已被反复实现**，且全部满足我们的前提（键盘跑**未修改的**原版 ZMK）。
+
+**最强先例：`hirosatosou/roba-ble-hid-bridge`**（Raytac MDBT50Q-CX-40 / nRF52840，NCS + Zephyr）
+
+- README 原文（**已亲自核对**）：*"runs **unmodified** stock ZMK — all the work is in the dongle."*
+- 且**明确描述了我们设想的三档开关用法**：Dongle 只是*"just one host profile, allowing you to
+  switch between the dongle and direct BLE using `&bt BT_SEL`"*
+- Dongle 作 BLE central 连键盘 → 转 USB HID；带 bond 清除按钮（长按 3 s），
+  且文档指出**必须两端都清**（Dongle 按钮 + 键盘 `&bt BT_CLR`）
+- 自述优势：*"Deterministic low latency. The dongle is always the central and pins the [link]"*
+
+**其他实现**（均已核对仓库存在与自述）：
+
+| 项目 | 硬件 | 备注 |
+| --- | --- | --- |
+| `ShiniNet/zmk-usb-bridge` | nRF52840 | 专为「ZMK 键盘 → 专用 USB 接收器」，**附对真机（LaLapadGen2）的验证日志** |
+| `anisehid/hid-proxy-for-ble-keyboard` | ESP32-C3 + CH9329 | ★29（最多星）。README 原文 *"Tested with: **ZMK-based keyboards**, Keychron K2 HE"* |
+| `lvntbkdmr/ble-to-hid` | **Seeed XIAO nRF52840** | 为无线 Corne 而写 —— **正好是 ADR-0001 原定的 Dongle 硬件** |
+| `mosquito/ble-hid-bridge` | ESP32-S3 | 最多同时接 4 个 BLE 外设，通用 HID Report Map 解析 |
+
+⇒ **不必从零写固件**，有多个可读、可改的现成实现，其中两个的硬件就是我们的候选。
+
+**配对不是障碍**（一手核实，来自 ZMK 源码）：
+
+- ZMK 的 `app/Kconfig` 硬选 `BT_SMP_SC_PAIR_ONLY` ⇒ 要求 **LE Secure Connections**，
+  Dongle 必须支持 LESC（NCS 的 `CONFIG_BT_HOGP` 例程支持）。
+- `CONFIG_ZMK_BLE_PASSKEY_ENTRY` **默认 `n`** ⇒ 走 **Just Works**，Dongle 无需显示/键盘。
+  ⇒ **不要开启它。**
+- ⚠️ 注意：ZMK 的 `passkey_display` 回调是**被注释掉的**（`app/src/ble.c`：
+  `// .passkey_display = auth_passkey_display,`）—— ZMK **只能输入 passkey、不能显示**。
+  一旦启用 `PASSKEY_ENTRY`，就必须由 Dongle 侧显示 6 位码（走 USB CDC 串口可行）。
+
+**ZMK 上游的态度（不是技术性否决）**：issue #1420「Pure USB receiver dongle」于 2025-01
+被关闭，**理由只是维护者转向了分体方案**（*"Now that #2525 documents adding a dongle, I'll close this."*）；
+HOGP-client 路线**从未被以技术理由否决**。维护者 petejohanson 在 #2395 中表示
+HOGP client 应当是 **module 而非核心**。另见仍开放的 #2885（运行时切 central/peripheral）。
+
 ### 待决
 
-- ❓ Dongle 固件是自己写（nRF52840 / ESP32 做 BLE central + HID client + USB HID），
-  还是先买一个成品「蓝牙转 USB」适配器验证整个构想。
-  **成品适配器与 ZMK 键盘的兼容性尚未核实。**
-- ❓ Dongle 的硬件选型（原 ADR 提到 Seeed XIAO nRF52840）与 `firmware/build.yaml` 中
-  被注释掉的 Dongle 构建项，需按本修订重新设计。
+- ❓ **选哪个现成实现作为起点**（倾向 `roba-ble-hid-bridge`，理由最贴合且文档最全）。
+- ❓ **Dongle 硬件选型**：XIAO nRF52840（原 ADR 的选择，且有 `lvntbkdmr` 先例）
+  vs Raytac MDBT50Q-CX-40（roba 的选择）。
+- ❓ `firmware/build.yaml` 中被注释掉的 Dongle 构建项需按本修订重新设计
+  —— 注意 Dongle **不跑 ZMK**，因此它**不进 ZMK 的 build matrix**，
+  而是独立固件工程。
+- 💡 **可零成本先验证整个构想**：买一个现成的 BLE-HID→USB 适配器，
+  让键盘当普通蓝牙键盘连它，验证「Dongle 档」体验，再决定是否自制。
 
 > 本修订**不改变** ADR-0001 的核心决策（用 BLE Dongle 而非原生 2.4GHz 射频）。
 > 原生 2.4GHz 被否决的理由在本轮调研中**得到加强**：
