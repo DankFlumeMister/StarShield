@@ -133,7 +133,42 @@ Dongle 固件必须自研。** 这是本项目一块**确定要投入的固件�
   （`if (param->latency > 0 || param->interval_max > 6) return false;`）。
   作者指出**键盘自己请求的是 15 ms / latency 30** ——
   ⇒ **Dongle 是在强行覆盖键盘自身的省电偏好**。这是「两端可控」的具体机制。
-- ⚠️ **所有延迟数字都是计算或主观感受，没有任何项目公布过示波器/逻辑分析仪实测。**
+
+##### ⚠️ 但「Dongle 更快」这个说法，**强形式是错的**（必须记账）
+
+我此前把「Dongle 能控制两端 ⇒ 更快」写得过于肯定。经核实：
+
+- ✅ **对的部分**：蓝牙规范把连接间隔的决定权给 **Central**
+  （Core 6.1 Vol 6 Part B：*"The connInterval… is set by the Initiator's Link Layer"*），
+  且 ZMK 自己的 Dongle 链路确实钉在 7.5 ms。
+- ❌ **错的部分（强形式）**：**ZMK 在每一个原版构建里本来就在向主机请求 7.5–15 ms** ——
+  `app/Kconfig` 覆盖了 Zephyr 的默认值：`BT_PERIPHERAL_PREF_MIN_INT` 默认 **6**、
+  `MAX_INT` 默认 **12**（Zephyr 自己是 24/40）。
+  而且 **Linux 会接受外设发起的合法参数请求**
+  （`l2cap_conn_param_update_req()` → `L2CAP_CONN_PARAM_ACCEPTED` → `hci_le_conn_update`）。
+  ⇒ 「直连主机一定是慢的」**不成立**。
+- 🔍 **唯一一个真实数据点**（issue #2661）：macOS 日志显示一台 ZMK Corne
+  *"switching to 15.00 ms latency(0)"*，而设备侧日志是 `interval 12 latency 22`
+  —— macOS 落在 ZMK 请求区间的**上沿**，没给到 7.5 ms 下限。
+  ⇒ 这**提示**（但不证明）在 macOS 上钉死 min=max=7.5 ms 的 Dongle 可能确实更快。
+  这是**连接参数数据，不是按键延迟**，且是单次偶发观测。
+- 🔴 **根本问题：没人测过。** 「Dongle vs 直连主机」的按键延迟
+  **不存在任何公开实测**；事实上**任何路径**上的 ZMK 按键到主机延迟都没有实测。
+  这是**结构性缺失**而非暂时缺失：现存两套测量装置（Dan Luu 的切 USB 线接逻辑分析仪、
+  Stapelberg 的驱动矩阵 + 测 Caps Lock LED 引脚）**都是有线的**，
+  无法测量主机的蓝牙射频路径。
+
+⇒ **结论：Dongle 的延迟优势属于「机制上可能、但未经测量」，不得作为选型理由。**
+要拿它当理由，必须先自建测量装置（Stapelberg 的 Caps Lock LED 往返法可穿过后端 HID 输出报告，
+不需要 GPIO，是可行候选）。
+
+#### 💡 顺带一个重要发现：Dongle 的核心卖点之一可以免费拿到
+
+Dongle 常被宣传的好处是「能进 BIOS / 不需要配对」。但 **BIOS 场景一条线就解决了**：
+`CONFIG_ZMK_USB_BOOT=y`（USB Boot Protocol 支持）。
+
+⇒ **Dongle 真正独有、且无法用线替代的价值只剩一条：在「没有蓝牙的机器」上无线使用。**
+这个价值比第一眼看上去窄得多，**应在决定是否投入 Dongle 固件开发前明确它对本项目是否必要。**
 
 #### ⚠️ 一个会让人白掉头发的实现陷阱（来自 anisehid 的 ESP32 实践）
 

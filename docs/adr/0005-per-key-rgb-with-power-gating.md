@@ -55,19 +55,28 @@ P-FET 源极 = 4.2 V（满电），栅极最高只能被 3.3 V GPIO 拉到 3.3 V
 | --- | --- | --- | --- | --- |
 | A 直驱 P-FET | nRFMicro（Q2 `AO3407`）、nice!nano v1 | `ACTIVE_LOW` | **3.3 V 轨** | ❌ LED 需 ≥3.7 V |
 | B 门控 LDO 使能脚 | nice!nano v2（XC6220 `CE`）、sasodoma SuperMini | `ACTIVE_HIGH` | — | ❌ 同上，且与 ADR-0007 冲突 |
-| **C NMOS 反相 + P-FET** | **kurtis-lew/Conejo**、Croktopus 设计指南 | `ACTIVE_HIGH` | 电池轨 | ✅ **唯一可行** |
+| **C NMOS 反相 + P-FET** | **kurtis-lew/Conejo**、ZMK 硬件设计指南 | `ACTIVE_HIGH` | 电池轨 | ✅ **唯一可行** |
 
 **关键结论：没有任何键盘项目把 P-FET 源极放在 4.2 V 电池轨、栅极直接由 3.3 V GPIO 驱动**
 （30+ 仓库范围内核实）。凡是 GPIO 直驱 P-FET 的项目，**全部**把源极放在 3.3 V 稳压轨 ——
 正是在绕开勘误 2 的问题。
 
-### ⚠️ 照抄哪一个：选 **Conejo**，不要照抄 Croktopus 设计指南
+> ⚠️ **归属更正（2026-09）**：本文所称「ZMK 硬件设计指南」的**原作者是 `ebastler`**
+> （[`ebastler/zmk-designguide`](https://github.com/ebastler/zmk-designguide)，★494）。
+> 本项目早期调研引用并做网表还原的是它的一份 **2022 年 fork 快照**
+> （`Croktopus/zmk-designguide`，★2），两者**原理图内容不同**
+> （470,802 B vs 348,045 B）。引用时请以上游 `ebastler` 为准。
+> 该指南**没有任何模式开关**（无 BT/2.4G/MODE 网络标签），
+> 其唯一的电源开关是 `SW1`（值为 `PWR`，接 `BQ24075` 的 `SYSOFF`）——
+> ⇒ 它**不是**「一个开关同时管模式与电源」的先例。
+
+### ⚠️ 照抄哪一个：选 **Conejo**，不要照抄 ZMK 硬件设计指南
 
 **体二极管方向**：P-MOSFET 体二极管 **阳极在漏极**，因此导通方向是 `D → S`。
 正确的高边开关接法是 **源极接电源轨、漏极接负载轨**。
 
 - ✅ 方向正确：**Conejo Q3**（`S=VDDH` 电源、`D=EXT_PWR` 负载）、nRFMicro Q2、nice!nano v1 Q2
-- ⚠️ 方向存疑：**Croktopus 设计指南 Q3** 把 `S` 放在负载侧（`UG_PWR`）、`D` 放在电源侧（`+VSW`），
+- ⚠️ 方向存疑：**ZMK 硬件设计指南 Q3** 把 `S` 放在负载侧（`UG_PWR`）、`D` 放在电源侧（`+VSW`），
   两份独立提取与仓库自带的渲染图在引脚号上一致 ⇒ **不是解析错误**；
   但未能排除「KiCad 符号的 S/D 引脚名与实际 SOT-23 不符」这一可能，
   故**标记待 EE 复核而非断言为缺陷**。该设计的 README 声称

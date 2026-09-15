@@ -23,8 +23,8 @@
 
 | 做法 | 实例数量 | 说明 |
 | --- | --- | --- |
-| **小开关直接串电池路径**（超额定使用） | **12+ 块板** | TOTEM、KOMETA、Croktopus 设计指南、Ladniy/TK44、yumagulovrn/dao-choc-ble、KLOR、KLOTZ、uninarf、chocopi、ergonautkb/one、chitin、Sweep Bling LP、taira |
-| **开关切 `BQ24075` 的 `SYSOFF`**（开关只走 µA） | **3 个独立实现** | Croktopus 设计指南、**kurtis-lew/Conejo**、**ebastler/osprey** |
+| **小开关直接串电池路径**（超额定使用） | **12+ 块板** | TOTEM、KOMETA、ZMK 硬件设计指南、Ladniy/TK44、yumagulovrn/dao-choc-ble、KLOR、KLOTZ、uninarf、chocopi、ergonautkb/one、chitin、Sweep Bling LP、taira |
+| **开关切 `BQ24075` 的 `SYSOFF`**（开关只走 µA） | **3 个独立实现** | ZMK 硬件设计指南、**kurtis-lew/Conejo**、**ebastler/osprey** |
 | **P-FET 串电池主回路 + 小开关驱动栅极** | **0** | 核验到的电池侧 P-FET 栅极一律由 USB VBUS、MCU GPIO 或经 N-FET 驱动，**没有一个由拨动开关驱动** |
 | **集成负载开关 IC**（TPS22910 之类） | **0** | 30+ 仓库范围内未发现 |
 
@@ -102,14 +102,32 @@
 **收益**：只需要**一个**开关（ADR-0009 的模式开关），不占额外面板面积，
 且用户心智模型简单 —— 「有线档 = 关机」。
 
-### 实现方式（两选一，待定）
+### 实现方式（方式 1 已找到可用料号）
 
 **方式 1：`DP3T`（双刀三档）** —— 刀 A 走模式、刀 B 切 `SYSOFF`
 
 - 刀 B：公共端 → `SYSOFF`；有线档 → 经 100 kΩ → `VBAT`（断开）；另两档 → `GND`（接通）。
 - ✅ **纯机械触点，无歧义、无漏电路径**，最稳。
-- ❓ **待核实**：微型 SMD `DP3T` 的可用料号、封装与尺寸（`MSK12C02` 是**单刀** SPDT，不够用）。
-  这是本方案唯一的采购风险。
+- ✅ **料号已核实存在且可买**：
+
+  | 候选 | 规格 | 采购 |
+  | --- | --- | --- |
+  | **SHOU HAN `MST23D19G2`** ✅ **首选** | 2 刀 3 档（8 脚 = 2 公共 + 6 掷），SMD 立贴，**12.95 × 3.55 × 3.5 mm**，100 mA @ 12 V，10000 次，−25…+70 °C | **LCSC C431545**，常规在库、带 `SMT扩展库` 标签 ⇒ **可直接进 JLC 贴片 BOM** |
+  | Alps Alpine `SSSS224500` | 2 刀 3 档，回流焊 SMD，13.0 × 3.5 × 3.5 mm，0.3 A @ 6 V，10000 次，−40…+85 °C | LCSC C470522，但**无报价/库存阶梯**，Alps MOQ 1400/5600 ⇒ 视为订货件 |
+  | C&K `AYZ0203AGRLC` | DP3T，ON-ON-ON，SMD 鸥翼，0.1 A 12 V | Digi-Key 401-2015-1、Farnell 2319975；**LCSC 无货**；尺寸未核实 |
+  | G-Switch `SS-23D07-G040` | THT，12.7 × 7 × 8.7 mm，300 mA 50 V | LCSC C54305659 |
+
+- ⚠️ **尺寸代价（不是 drop-in）**：SMD `DP3T` 约 **13.0 × 3.5 × 3.5 mm**，
+  而常见 `MSK12C02` 的实际本体是 **8 × 2.8 × 1.4 mm**
+  （**更正**：不是「约 3.0 × 1.5 mm」——那 1.5 mm 是**手柄高度**，LCSC 商品页写明）。
+  ⇒ **长约 +5 mm、高约 +2.1 mm**，面板开孔与 PCB 占位都需相应调整。
+- ⚠️ **必须自己画封装**：**官方 KiCad 库中没有任何 DP3T/2P3T 封装**
+  （已用 GitLab API 枚举 `Button_Switch_SMD.pretty` 与 `Button_Switch_THT.pretty` 确认；
+  仅有的多档滑动开关封装是 `SW_SP3T_PCM13`、`SW_Slide_SP3T_Straight_CK_OS103012MU1QP1`、
+  `SW_Slide-03_Wuerth-WS-SLTV`）。
+  ⚠️ **陷阱**：KiCad **有** `Switch:SW_DP3T` **符号**，但那只是符号不是封装 ——
+  社区里确有项目引用了该符号却挂了 **DPDT** 的 land pattern。
+  可复用社区封装：`HalfSweet/Kicad_Lib` → `My Switch.pretty/SW-SMD_MST23D19G2.kicad_mod`。
 
 **方式 2：`SP3T` + 一颗晶体管** —— 用「有线」档的 GPIO 节点去驱动 `SYSOFF`
 

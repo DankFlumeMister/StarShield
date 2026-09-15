@@ -199,7 +199,7 @@ USB-C 母座 (J1)
 
 **路线 A：换成 `BQ24075` + 小开关切 `SYSOFF`（推荐）**
 
-真实先例：ZMK 官方社区设计指南（`Croktopus/zmk-designguide`，网表已核验）——
+真实先例：ZMK 官方社区设计指南（[`ebastler/zmk-designguide`](https://github.com/ebastler/zmk-designguide)，网表已核验）——
 `MSK12C02` 公共端接 `BQ24075` 的 `SYSOFF`，一端经 100 kΩ 上拉到 `+BATT`（关断），另一端接 GND（开机）；
 另有 `2N7002` 在插入 USB 时把 `SYSOFF` 拉低，保证插电仍能充电。
 作者原话：*"can be used to switch the battery off **without the whole battery current passing through
@@ -210,7 +210,7 @@ the microswitch** … this switch does not have any significant current flowing 
 | 开关实际电流 | ≈ 4.2 V / 100 kΩ ≈ **42 µA** → 对 50 mA 额定有 **约 1000 倍余量** |
 | 料号 | 仍可用 `MSK12C02`（便宜、SMD、有官方 KiCad 封装） |
 | **关键可行性** | ✅ 已核验：**`BQ24075RGT` 与 `BQ24072RGT` 封装完全相同**（`VQFN-16-1EP_3x3mm_P0.5mm_EP1.6x1.6mm`），pin 15 即 `SYSOFF` → **可视为 drop-in 替换** |
-| **先例数量** | ✅ **3 个独立实现**（不只设计指南）：**Croktopus 设计指南**、**kurtis-lew/Conejo**、**ebastler/osprey**，接线一致，均网表级核实 |
+| **先例数量** | ✅ **3 个独立实现**（不只设计指南）：**ZMK 硬件设计指南**、**kurtis-lew/Conejo**、**ebastler/osprey**，接线一致，均网表级核实 |
 | ⚠️ **残留漏电** | **`IBAT(PDWN)` = 4.3 µA 典型 / 6.5 µA 最大**（TI SLUS810N）。**数据手册中不存在「SYSOFF 断开后 BAT 漏电」的专门指标**；§9.4.1 的「10 µA」是举例叙述，**不是规格**。⇒ **这是低漏电态，不是电气隔离**（实用上 3000 mAh ÷ 4.3 µA ≈ 82 年，对存放目的等同于断开） |
 | ⚠️ **反向发现** | **nice!nano v2 用 BQ24075，却把 SYSOFF 硬接 GND**，断电改走门控 LDO 的 `CE` —— 旗舰商业 ZMK 控制器主动放弃了 SYSOFF 路线 |
 | 副作用 | `SYSOFF` 拉高会同时禁用充电（串联接法固有），需一颗 `2N7002` 在插 USB 时拉低 |
@@ -267,7 +267,10 @@ PMOS 源极接电池（4.2 V），栅极由 3.3 V GPIO 驱动：
 > 更准确的表述是：**−0.9 V 落在亚阈值区，数据手册未规定该点行为，因此不能保证关断。**
 > 投板后**必须实测**该引脚的关断漏电。
 
-> ✅ **照抄哪一个：选 `kurtis-lew/Conejo`，不要照抄 Croktopus 设计指南。**
+> ✅ **照抄哪一个：选 `kurtis-lew/Conejo`，不要照抄 ZMK 硬件设计指南。**
+> ⚠️ **归属更正**：该指南原作者是 **`ebastler`**（[`ebastler/zmk-designguide`](https://github.com/ebastler/zmk-designguide)，★494）；
+> 本项目早期网表还原用的是它一份 **2022 年 fork 快照**（`Croktopus/...`，★2），
+> 两者原理图内容不同。该指南**没有模式开关**，不是「一开关管模式+电源」的先例。
 > 体二极管分析见下一节；Conejo 是**同拓扑但方向正确**的实现（`S=VDDH` 电源、`D=EXT_PWR` 负载）。
 > ⚠️ **30+ 仓库核实结论：没有任何键盘项目把 P-FET 源极放在 4.2 V 电池轨、栅极直接由 3.3 V GPIO 驱动。**
 > 凡是 GPIO 直驱 P-FET 的项目（nRFMicro、nice!nano v1）**全部**把源极放在 **3.3 V 稳压轨** ——
