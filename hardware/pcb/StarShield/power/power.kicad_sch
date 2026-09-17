@@ -3705,7 +3705,7 @@
 	(text "StarShield 电源子图 —— 由 docs/_tools/gen_power_sch.py 自动生成，请勿手改；改电路请改 docs/_tools/power_design.py。依据：docs/power-architecture.md / docs/bq24072-pinout.md" (exclude_from_sim no) (at 25.4 33.02 0)
 		(effects (font (size 1.27 1.27)) (justify left bottom))
 		(uuid "5843ff7a-fe0f-586b-8cfe-c9ff415dd197"))
-	(text "【取值依据】U1=BQ24072RGT。电池 = 2x5000mAh 并联（1S2P 共用一块 PCM，共 10000mAh）。ICHG = 890 / R_ISET = 0.5 A（=0.05C @10000mAh）；EN2=0 且 EN1=1 选 USB500 档（输入上限 500 mA）；~CE 接 VSS 常开；TD 接 VSS 使能充电终止；TS 经 10k 到 VSS 禁用温度监测；TMR 接 VSS 禁用所有安全定时器（充满 10000mAh 约需 20h，超出定时器 12h 上限）。VBUS 经 F1（500mA）后进 IN。容量与商用键盘对照见 docs/power-architecture.md 3.5" (exclude_from_sim no) (at 25.4 165.1 0)
+	(text "【取值依据】U1=BQ24072RGT。电池 = 2x5000mAh 并联（1S2P 共用一块 PCM，共 10000mAh）。ICHG = 890 / R_ISET = 0.5 A（=0.05C @10000mAh）；EN2=0 且 EN1=1 选 USB500 档（输入上限 500 mA）；~CE 接 VSS 常开；TD 接 VSS 使能充电终止；TS 经 10k 到 VSS 禁用温度监测；TMR 接 VSS 禁用所有安全定时器（充满 10000mAh 约需 20.6h，超出定时器 7.2-12h 上限）。VBUS 经 F1（500mA）后进 IN。容量与商用键盘对照见 docs/power-architecture.md 3.5" (exclude_from_sim no) (at 25.4 165.1 0)
 		(effects (font (size 1.27 1.27)) (justify left bottom))
 		(uuid "8472d8d5-bb63-51e2-b6bd-d01125ba1010"))
 	(text "【电源路径】负载必须接 OUT 而不是 BAT（ADR-0002）。OUT 稳压到 VBAT + 225 mV，满电时 OUT 约 4.4 V。VLED 由 OUT 经 Q1 门控 —— 属电池直供，不含任何升压（ADR-0007 / ADR-0005）" (exclude_from_sim no) (at 25.4 173.99 0)

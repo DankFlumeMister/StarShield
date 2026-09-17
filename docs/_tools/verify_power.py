@@ -159,7 +159,7 @@ def main():
           got.get("ILIM") == {("R3", "1"), ("U1", "12")} and ("R3", "2") in got.get("GND", set()))
     check("ISET 装了 R4（0.5 A）；TS 经 R5 到 VSS（禁用温测）",
           got.get("ISET") == {("R4", "1"), ("U1", "16")} and got.get("TS") == {("R5", "1"), ("U1", "1")})
-    check("TMR 直接接 VSS 禁用所有安全定时器（已无 R_TMR 件；10000 mAh 需约 20 h > 定时器 12 h 上限）",
+    check("TMR 直接接 VSS 禁用所有安全定时器（已无 R_TMR 件；10000 mAh 需约 20.6 h > 定时器 7.2–12 h 上限）",
           ("U1", "14") in got.get("GND", set()) and "TMR" not in got)
     check("USB 输入经 F1 保险丝后才进充电器（VBUS 只挂 USB-C 与保险丝；U1.IN 在 VCHG_IN）",
           got.get("VBUS") == {("J1", "A4"), ("J1", "A9"), ("J1", "B4"), ("J1", "B9"), ("F1", "1")}
