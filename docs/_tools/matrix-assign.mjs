@@ -7,9 +7,21 @@ import fs from 'node:fs';
 const kle = JSON.parse(fs.readFileSync('sketch/keyboard-layout.json', 'utf8'));
 
 // ---------- 1. 解析 KLE（x/y 为累积偏移，作用于其后的键并持续累加） ----------
+// 属性白名单：教训是「第二轮廓 x2/y2/w2/h2 曾被静默丢弃，主 Enter 被当成矩形」。
+// 因此这里改成**遇到未识别属性直接抛错**，禁止静默忽略。
+const KNOWN_GEOM = ['x', 'y', 'w', 'h', 'x2', 'y2', 'w2', 'h2'];
+const KNOWN_IGNORED = ['a']; // 图例对齐（a = align），不参与几何计算
+const geomSet = new Set(KNOWN_GEOM);
+const ignoredSet = new Set(KNOWN_IGNORED);
+
 let cy = 0;
 const keys = [];
+let rowIdx = -1;
 for (const row of kle) {
+  rowIdx++;
+  if (!Array.isArray(row)) {
+    throw new Error(`KLE 第 ${rowIdx} 项不是数组（不支持顶层元数据对象）：${JSON.stringify(row)}`);
+  }
   let x = 0;
   // second = 异形键的第二轮廓（KLE 的 x2/y2/w2/h2，用于阶梯键，如主 Enter）。
   // 默认按 KLE 语义：偏移为 0，尺寸沿用主轮廓。
@@ -20,6 +32,15 @@ for (const row of kle) {
       x += pending.w;
       pending = { w: 1, h: 1, second: null };
     } else {
+      for (const p of Object.keys(it)) {
+        if (!geomSet.has(p) && !ignoredSet.has(p)) {
+          throw new Error(
+            `KLE 第 ${rowIdx} 行出现未识别属性 "${p}"（对象 ${JSON.stringify(it)}）。\n` +
+            `本生成器只理解几何属性 ${KNOWN_GEOM.join('/')}，以及不参与计算的 ${KNOWN_IGNORED.join('/')}。\n` +
+            `新增任何属性都必须先明确它对几何/开孔的影响，禁止静默忽略。`
+          );
+        }
+      }
       if (it.x !== undefined) x += it.x;
       if (it.y !== undefined) cy += it.y;
       if (it.w !== undefined) pending.w = it.w;
