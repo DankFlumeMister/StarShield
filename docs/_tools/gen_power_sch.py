@@ -255,7 +255,11 @@ def build():
                                            "GND", "", {}, f"flaggnd:{net}", ref_hidden=True,
                                            pins=("1",))))
         else:
-            body.append(global_label(net, at, 90))
+            # ⚠️ 这里必须与网络本身的标签类别一致：跨子图网络用全局标签，其余用局部标签。
+            #    给一个局部网络挂全局标签会触发 ERC [same_local_global_label]
+            #    （VCHG_IN 曾经踩过这条）。
+            body.append(global_label(net, at, 90) if net in D.GLOBAL_NETS
+                        else label(net, at, 90))
 
     # 3) 元件符号
     for c in D.COMPONENTS:

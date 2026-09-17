@@ -131,8 +131,8 @@ def main():
             joined |= nodes
     nc_missing = sorted(f"{r}.{p}" for r, p in nc if (r, p) in joined)
     check("设计为 NC 的引脚确实不接任何网络", not nc_missing, str(nc_missing))
-    check("NC 引脚数量 = 8（D+ D- SBU1 SBU2 各 2 个 + TMR + PGOOD）",
-          len(nc) == 8, f"实得 {len(nc)}")
+    check("NC 引脚数量 = 7（D+ D- SBU1 SBU2 各 2 个 + PGOOD；TMR 已装电阻、不再悬空）",
+          len(nc) == 7, f"实得 {len(nc)}")
 
     print()
     print("=" * 66)
@@ -159,6 +159,11 @@ def main():
           got.get("ILIM") == {("R3", "1"), ("U1", "12")} and ("R3", "2") in got.get("GND", set()))
     check("ISET 装了 R4（0.5 A）；TS 经 R5 到 VSS（禁用温测）",
           got.get("ISET") == {("R4", "1"), ("U1", "16")} and got.get("TS") == {("R5", "1"), ("U1", "1")})
+    check("TMR 装了 R10 = 47 kΩ 到 GND（默认 5 h 定时不足以充满 3000 mAh）",
+          got.get("TMR") == {("R10", "1"), ("U1", "14")} and ("R10", "2") in got.get("GND", set()))
+    check("USB 输入经 F1 保险丝后才进充电器（VBUS 只挂 USB-C 与保险丝；U1.IN 在 VCHG_IN）",
+          got.get("VBUS") == {("J1", "A4"), ("J1", "A9"), ("J1", "B4"), ("J1", "B9"), ("F1", "1")}
+          and got.get("VCHG_IN") == {("F1", "2"), ("C1", "1"), ("U1", "13")})
     check("散热焊盘 EP(U1.17) 接地", ("U1", "17") in got.get("GND", set()))
     check("CC1 / CC2 各自 5.1k 下拉且互不短接",
           got.get("CC1") == {("J1", "A5"), ("R1", "1")} and got.get("CC2") == {("J1", "B5"), ("R2", "1")})

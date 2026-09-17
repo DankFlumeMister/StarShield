@@ -41,6 +41,7 @@ WANTED = [
     ("Connector", "USB_C_Receptacle_USB2.0_16P"),
     ("Device", "R"),
     ("Device", "C"),
+    ("Device", "Fuse"),
     ("Device", "LED"),
     ("Connector_Generic", "Conn_01x02"),
     ("Transistor_FET", "2N7002"),

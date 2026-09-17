@@ -46,6 +46,16 @@ COMPONENTS = [
          fp="Resistor_SMD:R_0603_1608Metric", at=(110.49, 55.88), rot=0,
          props={"Note": "CC2 下拉 1%"}),
 
+    # --- USB 输入保护（照抄 nightliner：装在 VBUS 侧，不是电池侧）-------------
+    # ⚠️ 参考设计里唯一那颗装在**电池路径**上的保险丝（Conejo 的 F1）**不可照抄**：
+    #    串在电池路径上会让 RGB 的全部放电电流流过它（本项目峰值可达 A 级）⇒ 必然误断。
+    #    正确位置是 USB 输入侧：既与 USB500 档（输入上限 500 mA）配套，又能挡住输入短路。
+    # ⚠️ 额定值待 BOM 阶段确认：保险丝一般要按降额曲线使用（工作电流 ≤ 额定的 ~75%），
+    #    故 500 mA 是「照抄社区」的起点值，最终应以选定料号的曲线复核。
+    dict(ref="F1", lib="Device:Fuse", value="500mA",
+         fp="Fuse:Fuse_0603_1608Metric", at=(134.62, 71.12), rot=0,
+         props={"Note": "USB 输入限流保险丝；额定值待按降额曲线复核"}),
+
     # --- 充电器外围 ---------------------------------------------------------
     # C_IN：⚠️ 硬上限 < 10 µF（USB-IF 浪涌要求）
     dict(ref="C1", lib="Device:C", value="1uF",
@@ -53,14 +63,24 @@ COMPONENTS = [
          props={"Note": "VBUS 去耦，硬上限 <10uF"}),
     # R_ILIM：EN2=0/EN1=1 选 USB500 档，此电阻不参与限流，但**必须装**
     #（数据手册：ILIM 悬空会关闭所有充电，且启动时要做 ILIM 短路检测）
-    dict(ref="R3", lib="Device:R", value="1.6k",
+    # 取值对齐社区成熟方案：osprey / designguide 均为 1.5 kΩ（≈1.07 A）
+    dict(ref="R3", lib="Device:R", value="1.5k",
          fp="Resistor_SMD:R_0603_1608Metric", at=(95.25, 99.06), rot=0,
-         props={"Note": "USB500 档下不参与限流，但必须装（悬空=关闭充电）"}),
+         props={"Note": "USB500 档下不参与限流，但必须装（悬空=关闭充电）；取值同社区 1.5k"}),
     # R_ISET：ICHG = 890 / R_ISET ⇒ 0.5 A。与 USB500 的 500 mA 输入上限相配，
     # 避免「编程 1 A 但永远达不到」的虚标。
+    # ⚠️ 不要把值改成社区那三家的 3.9 kΩ：它们的电池只有 200–500 mAh，
+    #    0.23 A 对它们相当于 0.5–0.9C；本项目电池 3000 mAh，照抄会变成 0.077C（约 13 h）。
+    #    R_ISET 应按**C 倍率**换算，不按绝对电流照抄。论证见
+    #    research/battery-charging-community-precedent.md §3 与 power-architecture.md §3.2。
     dict(ref="R4", lib="Device:R", value="1.78k",
          fp="Resistor_SMD:R_0603_1608Metric", at=(95.25, 119.38), rot=0,
-         props={"Note": "ICHG=890/1.78k≈0.5A，1%"}),
+         props={"Note": "ICHG=890/1.78k≈0.5A=0.17C@3000mAh，1%"}),
+    # R_TMR：47 kΩ ⇒ t_MAXCHG ≈ 6.25 h。**本项目必须装**（社区 osprey / designguide 同值）：
+    # ICHG 0.5 A 对 3000 mAh，仅 CC 段就约 6.2 h > 内部默认 5 h ⇒ 不装会在充满前被安全定时器掐断。
+    dict(ref="R10", lib="Device:R", value="47k",
+         fp="Resistor_SMD:R_0603_1608Metric", at=(95.25, 139.7), rot=0,
+         props={"Note": "R_TMR：6.25h 安全定时，必须装（默认 5h 不够充满 3000mAh）"}),
     # R_TS：10 kΩ 到 VSS ⇒ V_TS = 75 µA × 10 kΩ = 0.75 V，落在
     # V_HOT(300 mV) ~ V_COLD(2100 mV) 窗口内 ⇒ 不使用温度监测
     #（数据手册三处明确写出此法）。代价：放弃电池温度保护。
@@ -71,9 +91,10 @@ COMPONENTS = [
          props={"Note": "TS 到 VSS ⇒ 禁用温度监测（数据手册认可）"}),
 
     dict(ref="U1", lib="Battery_Management:BQ24072RGT", value="BQ24072RGT",
-         fp="Package_DFN_QFN:VQFN-16-1EP_3x3mm_P0.5mm_EP1.6x1.6mm",
+         fp="Package_DFN_QFN:VQFN-16-1EP_3x3mm_P0.5mm_EP1.6x1.6mm_ThermalVias",
          at=(152.4, 96.52), rot=0,
-         props={"MPN": "BQ24072RGT", "Note": "EP(17) 必须焊到接地铜皮 + 热过孔"}),
+         props={"MPN": "BQ24072RGT",
+                "Note": "EP(17) 必须焊到接地铜皮；封装已选 ThermalVias 变体（社区同做法）"}),
 
     # --- 输出 / 电池 --------------------------------------------------------
     dict(ref="C2", lib="Device:C", value="4.7uF",
@@ -131,6 +152,7 @@ CONN = {
     "J1.A1": "GND", "J1.A12": "GND", "J1.B1": "GND", "J1.B12": "GND",
     "J1.A4": "VBUS", "J1.A9": "VBUS", "J1.B4": "VBUS", "J1.B9": "VBUS",
     "J1.A5": "CC1", "J1.B5": "CC2",
+    "F1.1": "VBUS", "F1.2": "VCHG_IN",
     # ⚠️ P2/P10 未决：第一版 USB-C 仅充电，数据引脚留 NC。
     #    若日后要「有线档走键盘自己的 USB-C」，把 D+/D- 改成全局标签 USB_DP/USB_DM，
     #    并在 B2 里接到主控。见 docs/power-architecture.md §4。
@@ -141,13 +163,14 @@ CONN = {
     "R1.1": "CC1", "R1.2": "GND",
     "R2.1": "CC2", "R2.2": "GND",
 
-    "C1.1": "VBUS", "C1.2": "GND",
+    "C1.1": "VCHG_IN", "C1.2": "GND",
     "C2.1": "OUT", "C2.2": "GND",
     "C3.1": "VBAT", "C3.2": "GND",
 
     "R3.1": "ILIM", "R3.2": "GND",
     "R4.1": "ISET", "R4.2": "GND",
     "R5.1": "TS", "R5.2": "GND",
+    "R10.1": "TMR", "R10.2": "GND",
 
     # --- U1 BQ24072RGT -----------------------------------------------------
     "U1.1": "TS",          # TS 10k 到 VSS ⇒ 禁用温测
@@ -168,11 +191,11 @@ CONN = {
     "U1.9": "nCHG",        # ~CHG 开漏 → 充电 LED
     "U1.10": "OUT", "U1.11": "OUT",
     "U1.12": "ILIM",
-    "U1.13": "VBUS",       # IN
-    "U1.14": None,         # TMR 悬空 = 用内部默认定时（预充 30 min / 快充 5 h）。
-                           # ⚠️ ICHG=0.5 A 时 3000 mAh 充满约需 6 h > 5 h 默认值，
-                           #    但定时器在 DPPM/热调节期间按比例变慢，故仍够用。
-                           #    若日后把 ICHG 调到更小，必须改为装 R_TMR。
+    "U1.13": "VCHG_IN",    # IN —— 经 F1（500 mA 保险丝）后的 USB 输入
+    "U1.14": "TMR",        # TMR 装 R10 = 47 kΩ ⇒ 6.25 h。
+                           # ⚠️ 本项目**必须装**：ICHG 0.5 A 对 3000 mAh，仅 CC 段就约 6.2 h
+                           #    > 内部默认 5 h ⇒ 悬空会在充满前被安全定时器掐断（早期版本搞错过）。
+                           #    社区 osprey / designguide 亦为 47 kΩ。
     "U1.15": "GND",        # TD 接 VSS = 使能充电终止（数据手册要求不可悬空）
     "U1.16": "ISET",
     "U1.17": "GND",        # 散热焊盘 EP
@@ -209,6 +232,7 @@ SPARE_NETS = []
 # ---------------------------------------------------------------------------
 PWR_FLAGS = [
     dict(net="VBUS", at=(63.5, 50.8)),
+    dict(net="VCHG_IN", at=(120.65, 66.04)),   # 保险丝之后的输入段也要有驱动源
     dict(net="GND", at=(30.48, 134.62)),
 ]
 
@@ -221,9 +245,10 @@ NOTES = [
      "StarShield 电源子图 —— 由 docs/_tools/gen_power_sch.py 自动生成，请勿手改；"
      "改电路请改 docs/_tools/power_design.py。依据：docs/power-architecture.md / docs/bq24072-pinout.md"),
     (25.4, 165.1,
-     "【取值依据】U1=BQ24072RGT。ICHG = 890 / R_ISET = 0.5 A；"
+     "【取值依据】U1=BQ24072RGT。ICHG = 890 / R_ISET = 0.5 A（=0.17C @3000mAh）；"
      "EN2=0 且 EN1=1 选 USB500 档（输入上限 500 mA）；~CE 接 VSS 常开；TD 接 VSS 使能充电终止；"
-     "TS 经 10k 到 VSS 禁用温度监测；TMR 悬空 = 内部默认定时（预充 30 min / 快充 5 h）"),
+     "TS 经 10k 到 VSS 禁用温度监测；TMR 装 47k（6.25h 安全定时，默认 5h 不够）；"
+     "VBUS 经 F1（500mA）后进 IN。取值与社区成熟方案对照见 docs/power-architecture.md 3.4"),
     (25.4, 173.99,
      "【电源路径】负载必须接 OUT 而不是 BAT（ADR-0002）。OUT 稳压到 VBAT + 225 mV，"
      "满电时 OUT 约 4.4 V。VLED 由 OUT 经 Q1 门控 —— 属电池直供，不含任何升压（ADR-0007 / ADR-0005）"),
@@ -240,7 +265,8 @@ NOTES = [
      "ZMK 侧 ext-power 用 GPIO_ACTIVE_HIGH。控制链：GPIO 高 -> Q2 导通 -> Q1 栅极拉低 -> VLED 得电"),
     (25.4, 209.55,
      "【本版留空 / 未决项】P2 与 P10：USB-C 的 D+ D- SBU 全部 NC（第一版 USB-C 仅充电）；"
-     "U1 的 ~PGOOD 悬空（预留测试点）；U1 的 TMR 悬空。详见 docs/power-architecture.md 第 6 节待办"),
+     "U1 的 ~PGOOD 悬空（预留测试点）。F1 保险丝的额定值待按所选料号的降额曲线复核。"
+     "详见 docs/power-architecture.md 第 6 节待办"),
     (25.4, 218.44,
      "【投板后必须实测】1) AO3401A 在 Vgs 约 -0.9 V 时的关断漏电（标 UNVERIFIED）"
      "2) RGB 峰值电流下 OUT 压降是否仍在 250 mV 以内 3) 深睡整机电流（目标约 20 uA）"),
