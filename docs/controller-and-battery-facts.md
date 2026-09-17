@@ -114,7 +114,12 @@
   而 0.5 A 充满 10 Ah 需约 **20.6 h** ⇒ **任何 `R_TMR` 取值都不够**，
   故 `TMR` 接 VSS **禁用定时器**。详见 `docs/power-architecture.md` §3.5。
 
-### 2.4 TS 温度检测引脚 —— ⚠️ 硬阻塞，未核实
+### 2.4 TS 温度检测引脚 —— ✅ 已解决（2026-09-17）
+
+> **下方内容为当时的阻塞记录。** 现已解除：TS 阈值与「禁用温测」的合法接法都从
+> TI SLUS810N 正文取得了（`V_HOT` ≈ 300 mV / `V_COLD` ≈ 2100 mV，内部 75 µA 偏置，
+> 配 10 kΩ 恰对应 0–50 °C）。本项目取 **`R5` = 10 kΩ 到 VSS 禁用温测**。
+> 四个方案的完整对比见 `docs/bq24072-pinout.md` §3.4 与 `docs/power-architecture.md` §3.3。
 
 - ✅ 已确认：BQ24072 有 **NTC thermistor input**，特性为「BAT temp thermistor monitoring
   (hot/cold profile)」；TI 有应用笔记 **SPVA059**；**10k NTC 可用**（需配 R_S / R_P）。
@@ -173,10 +178,10 @@
 
 | ADR | 影响 | 处置 |
 | --- | --- | --- |
-| ADR-0002（BQ24072） | 补充充电电流建议 0.5–1.0 A（非 1.5 A 满流）与 R_ISET 取值；TS 引脚方案待定 | 🟡 待补充 |
-| ADR-0003（双控制器兼容 footprint） | **需重大修订**：nice!nano v2 = 21 GPIO；SuperMini **ZMK 官方不支持**；电池 ADC 脚冲突需 0Ω 跳线 | 🔴 待修订 |
+| ADR-0002（BQ24072） | 充电电流建议与 `R_ISET` 取值；TS 引脚方案 | ✅ **已补充**（ADR-0002 已加勘误；取值见 `docs/power-architecture.md` §3.1） |
+| ADR-0003（双控制器兼容 footprint） | nice!nano v2 = 21 GPIO；SuperMini **ZMK 官方不支持**；电池 ADC 脚冲突需 0Ω 跳线 | ✅ **已修订并决策**：第一版按 nice!nano v2 设计并保证；SuperMini 降级为「焊盘兼容、不保证」 |
 | ADR-0005（RGB 门控） | ✅ 得到强支撑：nice!nano 官方说明 **P0.13 置高可切断 VCC**，正是为省 LED 静态功耗 | ✅ 已印证 |
-| 新增 ADR（待写） | 矩阵引脚方案：直连 vs 74HC595 移位寄存器 | 🔴 待决策 |
+| ~~新增 ADR（待写）~~ | ~~矩阵引脚方案：直连 vs 74HC595 移位寄存器~~ | ✅ **已落地：ADR-0008（74HC595）** |
 
 ---
 
@@ -186,7 +191,7 @@
 | --- | --- | --- |
 | C1 | 人工查 TI SPVA059 + SLUS810N 补 TS 引脚参数 | 需人工（PDF 不可达） |
 | C2 | ~~决策矩阵引脚方案~~ ✅ **已定**：74HC595 移位寄存器，见 **ADR-0008** | 已完成 |
-| C3 | 修订 ADR-0003（SuperMini 不支持 ZMK / ADC 脚冲突） | 需用户决策 |
+| ~~C3~~ | ~~修订 ADR-0003（SuperMini 不支持 ZMK / ADC 脚冲突）~~ | ✅ **已完成**（ADR-0003 已加「修订」+「决策」两节） |
 | C4 | 采购实物：1× nice!nano v2 + 2–3 个不同货源 SuperMini + 1× Adafruit #328 作对照，卡尺 + 万用表实测 | 需采购 |
 | C5 | 索要 605080 完整规格书与实物卡尺厚度，确认能否出厂压接 JST-PH 2.0 | 需与供应商沟通 |
 | C6 | 定稿电池型号与电池仓尺寸（解除外壳阻塞） | 🟡 **容量已定（2×5000 mAh 并联，2026-09-17）**；剩采购落地与电池仓尺寸重定 ⇒ `power-architecture.md` P17 / P18 |
