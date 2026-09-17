@@ -223,6 +223,47 @@ host controlled for selecting different input current limits based on the input 
 > **现状**：第一版维持 **A**（`R5` = 10 kΩ 到 VSS）。`R5` 与一个 0603 NTC 同封装，
 > 所以若日后改走 B，硬件上无需改板，但**必须把 NTC 从板上移到电芯表面** —— 这属于装配问题，不是原理图问题。
 
+### 3.4 社区对照：本项目的两个选择都是主流做法
+
+完整对照见 **`research/battery-charging-community-precedent.md`**
+（对本机 31 个克隆仓库做两级扫描，用 `research/kicadnet.py` 做引脚级网表还原）。
+
+**先说样本边界**：31 个仓库里只有 **5 个**画了独立充电 IC（4 个是 BQ2407x）——
+**社区主流是「不画充电电路」，直接用控制器模块自带的充电器**
+（nice!nano 自带 BQ24075）。所以本项目把 `BQ24072` 做在主 PCB 上**本身是少数派做法**
+（理由见 ADR-0002）—— 这也意味着可比的样本天然有限。
+
+| 项 | 社区做法 | 本项目 | 判定 |
+| --- | --- | --- | --- |
+| 输入限流档 | **4/4 全部 USB500**，无一例走 ILIM 档换速度 | USB500 | ✅ 一致 |
+| `EN1` 接哪条轨 | **4/4 全部接 `OUT` 轨，无一例接 `VBUS`** | 接 `OUT` | ✅ 一致（§3.1 的安全理由被印证） |
+| `R_ILIM` | osprey / designguide 用 1.5 kΩ（≈1.07 A），**USB500 档下不用它却不省掉** | 1.6 kΩ（≈1.01 A） | ✅ 实质相同 |
+| `R_ISET` | osprey / designguide / nightliner **统一 3.9 kΩ ⇒ ≈0.23 A** | 1.78 kΩ ⇒ 0.5 A | ⚠️ 本项目**已在社区激进一侧** |
+| `R_TMR` | osprey / designguide 显式装 **47 kΩ（≈6.25 h）** | 悬空（默认 5 h） | ⚠️ 见下 |
+| 温度监测 | **3/4 禁用**（10 kΩ 到 GND）；1 个（nightliner）用 **3 脚电池座中间脚接 `TS`** 做真·电芯温测 | 禁用 | ✅ 一致；且**无任何样本**用「板上 NTC」 |
+
+**由此得到的三条修正：**
+
+1. **P13（充电档位）建议维持方案 1。** 社区 ICHG 普遍只有 0.23 A，我们用 0.5 A 已经更快；
+   4/4 都不用 ILIM 档换速度。若仍要提速，**1.0 A 是上限**（已超出全部社区样本）。
+2. **`R_TMR` 的依赖关系必须锁死**：osprey / designguide 之所以显式装 47 kΩ，
+   正是因为它们的 ICHG 只有 0.23 A（3000 mAh 充满远超 5 h 默认值）。
+   ⇒ 本项目只要把 ICHG 调到 **≤0.35 A**，就必须同步补装 `R_TMR`（18–72 kΩ），否则安全定时器会提前掐断。
+3. **P14（温度保护）若要做，照抄 nightliner 的做法**：把 `J2` 换成 **3 脚座**
+   （`Connector_JST:JST_XH_S3B-XH-A-1_1x03_P2.50mm_Horizontal` 或等效），中间脚接 `TS`，
+   **并且采购的电芯必须带 3 芯引线**。这是一次「连接器选型 + BOM + 采购要求」的联动变更。
+
+**社区做了、我们还没做的候选（备查，未决）**：
+
+| 候选 | 证据 | 备注 |
+| --- | --- | --- |
+| USB 输入 **500 mA 保险丝** | Conejo `F1`、nightliner `F1` 均为 `Fuse_0603` / `500mA` | 便宜，与 USB500 档配套 |
+| 输入 **TVS** | nightliner `U2 = TVS2200DRV` | 插劣质线的保护 |
+| **电量计 `MAX17048`** | Conejo `U2`、osprey `U3`、designguide `U9` 三家不约而同 | 比 nice!nano 的 ADC 估电量准；代价是 I²C + 1 器件 |
+| 电池分压到 MCU ADC | nightliner `R6=806k`/`R7=2M` → MCU `P0.31` | 独立电压检测通路 |
+| **固件控制充电开关** | nightliner 把 `R_ISET` 下端接 MCU `P1.13`（网络 `CHARGE_CTRL_2`） | ⭐ §3.2 没列到的第三条杠杆；但会让 ISET 的「实际电流监测」失效，且 `[DS]` 要求上电做 ISET 短路检测 ⇒ 有未知风险 |
+| EP 热过孔 | nightliner 的 `U4` 用 `..._EP1.6x1.6mm_ThermalVias` 封装 | 印证 `docs/bq24072-pinout.md` §2.2，B4 照做 |
+
 ---
 
 ## 4. USB-C 数据线（D+/D-）如何处理
