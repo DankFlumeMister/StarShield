@@ -151,15 +151,16 @@ def main():
           ("R9", "1") in got.get("Q2_G", set()) and ("R9", "2") in got.get("GND", set()))
     check("负载挂在 OUT 而不是 BAT（ADR-0002 电源路径管理）",
           ("Q1", "2") in got.get("OUT", set()) and ("Q1", "2") not in got.get("VBAT", set()))
-    check("EN2=GND 且 EN1=OUT ⇒ USB500 档（500 mA 输入上限）",
-          ("U1", "5") in got.get("GND", set()) and ("U1", "6") in got.get("OUT", set()))
+    check("EN2=OUT 且 EN1=GND ⇒ ILIM 档（输入限流由 R_ILIM = 1.6 kΩ ⇒ ≈1.0 A 决定）",
+          ("U1", "5") in got.get("OUT", set()) and ("U1", "6") in got.get("GND", set()),
+          "EN2 接 OUT 而非 VBUS：EN 脚绝对最大额定仅 7 V")
     check("~CE 接 VSS = 充电常开；TD 接 VSS = 使能终止",
           ("U1", "4") in got.get("GND", set()) and ("U1", "15") in got.get("GND", set()))
     check("ILIM 装了 R3 且 R3 另一端接地（悬空会关闭所有充电）",
           got.get("ILIM") == {("R3", "1"), ("U1", "12")} and ("R3", "2") in got.get("GND", set()))
-    check("ISET 装了 R4（0.5 A）；TS 经 R5 到 VSS（禁用温测）",
+    check("ISET 装了 R4（887 Ω ⇒ ICHG ≈ 1.0 A = 0.10C @10000mAh）；TS 经 R5 到 VSS（禁用温测）",
           got.get("ISET") == {("R4", "1"), ("U1", "16")} and got.get("TS") == {("R5", "1"), ("U1", "1")})
-    check("TMR 直接接 VSS 禁用所有安全定时器（已无 R_TMR 件；10000 mAh 需约 20.6 h > 定时器 7.2–12 h 上限）",
+    check("TMR 直接接 VSS 禁用所有安全定时器（已无 R_TMR 件；1.0 A 充满仍需约 10 h > 定时器 typ 9.6 h）",
           ("U1", "14") in got.get("GND", set()) and "TMR" not in got)
     check("USB 输入经 F1 保险丝后才进充电器（VBUS 只挂 USB-C 与保险丝；U1.IN 在 VCHG_IN）",
           got.get("VBUS") == {("J1", "A4"), ("J1", "A9"), ("J1", "B4"), ("J1", "B9"), ("F1", "1")}

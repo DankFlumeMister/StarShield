@@ -52,32 +52,38 @@ COMPONENTS = [
     #    正确位置是 USB 输入侧：既与 USB500 档（输入上限 500 mA）配套，又能挡住输入短路。
     # ⚠️ 额定值待 BOM 阶段确认：保险丝一般要按降额曲线使用（工作电流 ≤ 额定的 ~75%），
     #    故 500 mA 是「照抄社区」的起点值，最终应以选定料号的曲线复核。
-    dict(ref="F1", lib="Device:Fuse", value="500mA",
+    # ⚠️ 额定值随输入档位变更：原 500 mA 是配 USB500 档的；2026-09-18 输入档切到 **ILIM（1.0 A）** 后，
+    #    500 mA 保险丝**必然熔断** ⇒ 改为 **1.5 A**（1.0 A 工作电流约为额定的 67%，符合 ~75% 降额惯例）。
+    #    ⚠️ 仍待按所选料号的降额曲线最终复核（P15）。
+    dict(ref="F1", lib="Device:Fuse", value="1.5A",
          fp="Fuse:Fuse_0603_1608Metric", at=(134.62, 71.12), rot=0,
-         props={"Note": "USB 输入限流保险丝；额定值待按降额曲线复核"}),
+         props={"Note": "USB 输入保险丝：1.0A 工作电流下选 1.5A；待按降额曲线复核"}),
 
     # --- 充电器外围 ---------------------------------------------------------
     # C_IN：⚠️ 硬上限 < 10 µF（USB-IF 浪涌要求）
     dict(ref="C1", lib="Device:C", value="1uF",
          fp="Capacitor_SMD:C_0603_1608Metric", at=(110.49, 78.74), rot=0,
          props={"Note": "VBUS 去耦，硬上限 <10uF"}),
-    # R_ILIM：EN2=0/EN1=1 选 USB500 档，此电阻不参与限流，但**必须装**
-    #（数据手册：ILIM 悬空会关闭所有充电，且启动时要做 ILIM 短路检测）
-    # 取值对齐社区成熟方案：osprey / designguide 均为 1.5 kΩ（≈1.07 A）
-    dict(ref="R3", lib="Device:R", value="1.5k",
+    # R_ILIM：EN2=1/EN1=0 ⇒ **ILIM 档**，输入限流 = K_ILIM / R_ILIM = 1610 / 1600 ≈ 1.0 A。
+    # ⚠️ 即使不用 ILIM 档也必须装（数据手册：悬空会关闭所有充电，且启动时要过 ILIM 短路检测）。
+    # ⚠️ 1.0 A 输入**超出** 5.1 kΩ CC 下拉所声明的 500 mA —— 这是**有意的取舍**（P13，2026-09-18），
+    #    对标 EPOMAKER TH87（10000 mAh / ≤1 A）。输入不足时由 VIN-DPM 自动降流兜底。
+    #    完整论证见 docs/power-architecture.md §3.7。
+    dict(ref="R3", lib="Device:R", value="1.6k",
          fp="Resistor_SMD:R_0603_1608Metric", at=(95.25, 99.06), rot=0,
-         props={"Note": "USB500 档下不参与限流，但必须装（悬空=关闭充电）；取值同社区 1.5k"}),
-    # R_ISET：ICHG = 890 / R_ISET ⇒ 0.5 A。与 USB500 的 500 mA 输入上限相配，
-    # 避免「编程 1 A 但永远达不到」的虚标。
-    # ⚠️ 不要把值改成社区那三家的 3.9 kΩ：它们的电池只有 200–500 mAh，
-    #    0.23 A 对它们相当于 0.5–0.9C；本项目电池 10000 mAh（2×5000 并联），
-    #    照抄会变成 0.023C（约 43 h）。R_ISET 应按**C 倍率**换算，不按绝对电流照抄。
-    #    论证见 research/battery-charging-community-precedent.md §3 与 power-architecture.md §3.2。
-    # ⚠️ 0.5 A 对 10000 mAh 只有 0.05C，是「USB500 档下能取到的满值」而**不是快充**；
-    #    想提速必须切 ILIM 档（改 U1.5/U1.6 与 R3/R4），代价见 power-architecture.md §3.5。
-    dict(ref="R4", lib="Device:R", value="1.78k",
+         props={"Note": "ILIM 档：输入限流 1610/1.6k≈1.0A；悬空=关闭充电，必须装"}),
+    # R_ISET：ICHG = 890 / R_ISET。**887 Ω ⇒ ≈1.00 A（= 0.10C @10000mAh）**。
+    # 📌 2026-09-18 由 1.78 kΩ（0.5 A）改为 887 Ω，理由见 §3.7：
+    #    商用同容量（≥5000 mAh）键盘的充电区间是 **0.035–0.163C**，0.5 A 只等于 0.049C
+    #    （下三分之一）；1.0 A = 0.10C 落在区间中部，与 EPOMAKER TH87（10000mAh / ≤1A）一致。
+    # ⚠️ 耗散 (5 − 3.7) × 1.0 = 1.3 W；按 JEDEC 板 RθJA = 44.5 °C/W 估 +58 °C（Tj ≈ 83 °C），
+    #    低于 125 °C 热调节门限；键盘大铜皮下实际更低（未实测，见 §3.1 的 UNVERIFIED 列表）。
+    # ⚠️ 不要再照抄社区那三家的 3.9 kΩ：它们的电池只有 200–500 mAh，
+    #    0.23 A 对它们相当于 0.46–0.91C；本项目 10000 mAh 照抄会变成 0.023C（约 43 h）。
+    #    R_ISET 一律按 **C 倍率**换算，不按绝对电流照抄。
+    dict(ref="R4", lib="Device:R", value="887",
          fp="Resistor_SMD:R_0603_1608Metric", at=(95.25, 119.38), rot=0,
-         props={"Note": "ICHG=890/1.78k≈0.5A=0.05C@10000mAh，1%"}),
+         props={"Note": "ICHG=890/887≈1.0A=0.10C@10000mAh，1%"}),
     # --- R_TMR 已移除（2026-09-17，容量变更为 2×5000 mAh 并联后）-------------
     # ⚠️ 位号 R10 空出**不复用**（保持与历史版本的可比性）。
     # 原值 47 kΩ（t_MAXCHG ≈ 6.25 h）是为 3000 mAh 电芯配的。容量翻到 10000 mAh 后，
@@ -190,15 +196,17 @@ CONN = {
     "U1.2": "VBAT",        # BAT（power_out，双焊盘）
     "U1.3": "VBAT",
     "U1.4": "GND",         # ~CE 接 VSS = 常开（数据手册：CE 低 = 充电使能）
-    "U1.5": "GND",         # EN2=0
-    "U1.6": "OUT",         # EN1=1 ⇒ 与 EN2=0 组成 USB500 档（输入上限 500 mA）。
-                           # ⚠️ 接 OUT 而不是 VBUS：EN1 绝对最大额定 7 V，
+    "U1.5": "OUT",         # EN2=1
+    "U1.6": "GND",         # EN1=0 ⇒ 与 EN2=1 组成 **ILIM 档**：输入限流由 R3(R_ILIM) 决定。
+                           # 📌 2026-09-18 由 USB500 档切过来（用户决策 P13）。这是本项目
+                           #    **唯一一处主动超出 USB-C 声明**的地方，理由与代价见
+                           #    docs/power-architecture.md §3.7。
+                           # ⚠️ EN2 接 OUT 而**不是** VBUS：EN2/EN1 绝对最大额定只有 7 V，
                            #    而 IN 可承受 26 V ⇒ 接 VBUS 遇到超压适配器会被打坏。
                            #    OUT 恒在 3.0–4.5 V，VIH(min)=1.4 V 稳定满足。
-                           # 🔁 想提速（1.0 A / 1.3 A / 1.5 A）要改的是这四行：
-                           #    U1.5→"OUT"、U1.6→"GND"（切到 ILIM 档），
-                           #    再改 R3 / R4 的 value。四个方案对比与代价见
-                           #    docs/power-architecture.md §3.2。
+                           # 🔁 想改回 USB500 档（0.5 A）：把这四行复原 ——
+                           #    U1.5→"GND"、U1.6→"OUT"，并把 R3 改 1.5k、R4 改 1.78k。
+                           #    四个方案对比见 docs/power-architecture.md §3.2。
     "U1.7": None,          # ~PGOOD 开漏，第一版悬空（预留测试点）
     "U1.8": "GND",         # VSS
     "U1.9": "nCHG",        # ~CHG 开漏 → 充电 LED
@@ -265,10 +273,11 @@ NOTES = [
      "改电路请改 docs/_tools/power_design.py。依据：docs/power-architecture.md / docs/bq24072-pinout.md"),
     (25.4, 165.1,
      "【取值依据】U1=BQ24072RGT。电池 = 2x5000mAh 并联（1S2P 共用一块 PCM，共 10000mAh）。"
-     "ICHG = 890 / R_ISET = 0.5 A（=0.05C @10000mAh）；EN2=0 且 EN1=1 选 USB500 档（输入上限 500 mA）；"
-     "~CE 接 VSS 常开；TD 接 VSS 使能充电终止；TS 经 10k 到 VSS 禁用温度监测；"
-     "TMR 接 VSS 禁用所有安全定时器（充满 10000mAh 约需 20.6h，超出定时器 7.2-12h 上限）。"
-     "VBUS 经 F1（500mA）后进 IN。容量与商用键盘对照见 docs/power-architecture.md 3.5"),
+     "ICHG = 890 / R_ISET = 1.0 A（=0.10C @10000mAh）；EN2=1 且 EN1=0 选 ILIM 档，"
+     "输入限流 = 1610 / R_ILIM = 1.0 A；~CE 接 VSS 常开；TD 接 VSS 使能充电终止；"
+     "TS 经 10k 到 VSS 禁用温度监测；TMR 接 VSS 禁用所有安全定时器（10h 仍超定时器 typ 9.6h）。"
+     "VBUS 经 F1（1.5A）后进 IN。"
+     "注意：输入取 1.0A 超出 5.1k 的 USB 声明，是有意取舍，见 docs/power-architecture.md 3.7"),
     (25.4, 173.99,
      "【电源路径】负载必须接 OUT 而不是 BAT（ADR-0002）。OUT 稳压到 VBAT + 225 mV，"
      "满电时 OUT 约 4.4 V。VLED 由 OUT 经 Q1 门控 —— 属电池直供，不含任何升压（ADR-0007 / ADR-0005）"),
@@ -286,8 +295,9 @@ NOTES = [
      "P-MOS 体二极管阳极在 D，反接会让 LED 轨经体二极管常通，门控失效。"
      "ZMK 侧 ext-power 用 GPIO_ACTIVE_HIGH。控制链：GPIO 高 -> Q2 导通 -> Q1 栅极拉低 -> VLED 得电"),
     (25.4, 209.55,
-     "【本版留空 / 未决项】P2 与 P10：USB-C 的 D+ D- SBU 全部 NC（第一版 USB-C 仅充电）；"
-     "U1 的 ~PGOOD 悬空（预留测试点）。F1 保险丝的额定值待按所选料号的降额曲线复核。"
+     "【本版留空 / 未决项】USB-C 的 D+ D- SBU1 SBU2 全部 NC（J1 只做充电 —— "
+     "nRF52840 的 USB 是独立专用引脚，nice!nano 排针上无引出）；"
+     "U1 的 ~PGOOD 悬空（预留测试点）。F1 保险丝额定值待按所选料号降额曲线复核（P15）。"
      "详见 docs/power-architecture.md 第 6 节待办"),
     (25.4, 218.44,
      "【投板后必须实测】1) AO3401A 在 Vgs 约 -0.9 V 时的关断漏电（标 UNVERIFIED）"
