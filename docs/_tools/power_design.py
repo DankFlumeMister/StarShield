@@ -64,6 +64,8 @@ COMPONENTS = [
     # R_TS：10 kΩ 到 VSS ⇒ V_TS = 75 µA × 10 kΩ = 0.75 V，落在
     # V_HOT(300 mV) ~ V_COLD(2100 mV) 窗口内 ⇒ 不使用温度监测
     #（数据手册三处明确写出此法）。代价：放弃电池温度保护。
+    # ⚠️ 不要改成「板上焊一颗 NTC」—— 它测的是板温（含充电器自热），会间歇性停充。
+    #    四个方案的完整对比见 docs/power-architecture.md §3.3。
     dict(ref="R5", lib="Device:R", value="10k",
          fp="Resistor_SMD:R_0603_1608Metric", at=(95.25, 78.74), rot=0,
          props={"Note": "TS 到 VSS ⇒ 禁用温度监测（数据手册认可）"}),
@@ -153,10 +155,14 @@ CONN = {
     "U1.3": "VBAT",
     "U1.4": "GND",         # ~CE 接 VSS = 常开（数据手册：CE 低 = 充电使能）
     "U1.5": "GND",         # EN2=0
-    "U1.6": "OUT",         # EN1=1 ⇒ 与 EN2=0 组成 USB500 档。
+    "U1.6": "OUT",         # EN1=1 ⇒ 与 EN2=0 组成 USB500 档（输入上限 500 mA）。
                            # ⚠️ 接 OUT 而不是 VBUS：EN1 绝对最大额定 7 V，
                            #    而 IN 可承受 26 V ⇒ 接 VBUS 遇到超压适配器会被打坏。
                            #    OUT 恒在 3.0–4.5 V，VIH(min)=1.4 V 稳定满足。
+                           # 🔁 想提速（1.0 A / 1.3 A / 1.5 A）要改的是这四行：
+                           #    U1.5→"OUT"、U1.6→"GND"（切到 ILIM 档），
+                           #    再改 R3 / R4 的 value。四个方案对比与代价见
+                           #    docs/power-architecture.md §3.2。
     "U1.7": None,          # ~PGOOD 开漏，第一版悬空（预留测试点）
     "U1.8": "GND",         # VSS
     "U1.9": "nCHG",        # ~CHG 开漏 → 充电 LED
