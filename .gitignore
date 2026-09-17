@@ -101,6 +101,12 @@ private/
 PROJECT_HANDOFF.md
 docs/_internal/
 
+# 交接层里那两份**未清洗的原始调研报告**：清洗版已作为 research/*.md 入库，
+# 根目录这两份含子代理原始措辞、不得发布。⚠️ 它们**未被忽略时**是 `git add -A` 的地雷
+# （本仓库已经因为裸 `git add -A` 误推过第三方文件一次），故逐名钉死。
+/hardware-research-report.md
+/zmk-tri-mode-community-precedent.md
+
 # --- 生成器的中间产物 ---
 # `docs/_generated/` 里**只有 matrix.json 入库**（它是生成链的输入真相源，已跟踪）。
 # 其余都是「生成器 → merge 脚本」的一次性中间文件，例如 gen_matrix_doc.py 产出的
