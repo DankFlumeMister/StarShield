@@ -2,11 +2,14 @@
 """gen_matrix_sch.py — 由矩阵分配数据生成 KiCad 10 原理图（95 键矩阵，分 3 张子图）
 
 输入：docs/_generated/matrix.json（由 docs/_tools/matrix-assign.mjs 生成）
-输出：hardware/pcb/StarShield/
-        Starshield.kicad_sch      根图（含 3 个层次化子图符号）
+输出：hardware/pcb/StarShield/matrix/
         matrix/matrix_r012.kicad_sch   矩阵行 R0-R1
         matrix/matrix_r234.kicad_sch   矩阵行 R2-R3
         matrix/matrix_r45.kicad_sch    矩阵行 R4-R5
+
+⚠️ 根图 `Starshield.kicad_sch` **不由本脚本生成**（2026-09-17 拆出）：
+   根图是「工程有哪些子图」的清单，属工程级；现由 `docs/_tools/gen_root_sch.py` 负责。
+   新增子图（如电源子图）请改 gen_root_sch.py 的 SHEETS，不要改这里。
 
 ⚠️ 为什么要分图：KiCad 加载器对单张原理图有大小上限（实测约 226 KB / 559 个顶层元素）。
    95 键 + 95 二极管放在一张图里约 237 KB，会「加载原理图失败」。
@@ -156,25 +159,6 @@ def footer():
     ]
 
 
-def build_root(sheet_defs):
-    """根图：3 个层次化子图符号。"""
-    body = []
-    x, y = 60.0, 60.0
-    for name, title, _rows in sheet_defs:
-        body.append(
-            f'\t(sheet (at {x:.2f} {y:.2f}) (size 60.00 40.00) (fields_autoplaced yes)\n'
-            f'\t\t(stroke (width 0.1524) (type solid)) (fill (color 0 0 0 0.0000))\n'
-            f'\t\t(uuid "{uid("sheet:" + name)}")\n'
-            f'\t\t(property "Sheetname" "{title}" (at {x:.2f} {y-1.2:.2f} 0)\n'
-            f'\t\t\t(effects (font (size 1.27 1.27)) (justify left bottom)))\n'
-            f'\t\t(property "Sheetfile" "matrix/{name}.kicad_sch" (at {x:.2f} {y+40.0+1.0:.2f} 0)\n'
-            f'\t\t\t(effects (font (size 1.27 1.27)) (justify left top)))\n'
-            f'\t)'
-        )
-        y += 60.0
-    return header(uid("root-sheet"), "StarShield 95键矩阵（根图）", paper="A4") + body + footer()
-
-
 def kicad_str(s):
     """把任意文本安全地放进 KiCad 的双引号字符串里。
 
@@ -284,12 +268,8 @@ def main():
         n = sum(1 for k in keys if k["row"] in rows)
         written.append((p, n, os.path.getsize(p)))
 
-    # 根图
-    root = os.path.join(OUT_DIR, "Starshield.kicad_sch")
-    with open(root, "w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(build_root(SHEETS)) + "\n")
-    written.append((root, 0, os.path.getsize(root)))
-
+    # ⚠️ 根图**不在这里生成** —— 根图是「工程有哪些子图」的清单，属工程级，
+    #    已拆到 docs/_tools/gen_root_sch.py（新增子图只改那一个文件）。
     # 清理历史遗留：早期版本曾把 95 键全放一张图，该文件已废弃
     stale = os.path.join(OUT_DIR, "matrix.kicad_sch")
     if os.path.exists(stale):
