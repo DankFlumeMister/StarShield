@@ -13,8 +13,10 @@
 //   - firmware/boards/shields/starshield/starshield_transform.dtsi
 
 import fs from 'node:fs';
+import { validateMatrix } from './matrix_schema.mjs';
 
 const data = JSON.parse(fs.readFileSync('docs/_generated/matrix.json', 'utf8'));
+validateMatrix(data, 'gen-transform'); // 字段白名单：未登记字段直接抛错
 const keys = data.matrix.slice();
 const ROWS = data.rows, COLS = data.cols;
 

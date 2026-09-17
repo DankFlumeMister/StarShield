@@ -22,8 +22,10 @@
 // 用法: node docs/_tools/fold-matrix.mjs
 
 import fs from 'node:fs';
+import { validateKle } from './kle_schema.mjs';
 
 const kle = JSON.parse(fs.readFileSync('sketch/keyboard-layout.json', 'utf8'));
+validateKle(kle, 'fold-matrix'); // 未识别属性直接抛错，禁止静默忽略（见 PROJECT_HANDOFF §10.2 第 17 条）
 
 // ---------- 解析 KLE ----------
 let cy = 0;

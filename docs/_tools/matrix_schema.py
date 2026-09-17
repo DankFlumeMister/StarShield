@@ -1,36 +1,29 @@
 #!/usr/bin/env python3
-"""matrix_schema.py — docs/_generated/matrix.json 的字段白名单校验
+"""matrix_schema.py — docs/_generated/matrix.json 的字段白名单校验（Python 侧）
 
 为什么需要它：
 上一次事故的根因是「上游生成器静默丢弃了 KLE 的第二轮廓 x2/y2/w2/h2」，
-主 Enter 的异形轮廓因此丢失，被下游当成完整矩形。上游已经改成遇到未识别属性
+主键区 Enter 的异形轮廓因此丢失，被下游当成完整矩形。上游已经改成遇到未识别属性
 直接抛错；这里是第二跳 —— 下游脚本（gen_matrix_sch / gen_matrix_doc）读的是
 matrix.json，同样不能对字段视而不见。
 
-约定：
-- 顶层字段与每条键位记录的字段都在白名单内才允许通过；
-- 出现白名单外的字段一律报错（不是警告），逼迫先明确它对几何/开孔的影响；
-- 缺少必需字段同样报错。
+白名单本身不写死在本文件，而是读 docs/_tools/field_schema.json，
+与 JS 侧（kle_schema.mjs / matrix_schema.mjs）共用一份清单，避免两侧漂移。
 """
+import json
+import os
 import sys
 
-TOP_FIELDS = {
-    "generatedBy", "source", "unitMM", "rows", "cols",
-    "gpioNeeded", "diodes", "keyCount", "matrix",
-}
+HERE = os.path.dirname(os.path.abspath(__file__))
+SCHEMA_PATH = os.path.join(HERE, "field_schema.json")
 
-# 每条键位记录：必需字段（所有键都有）
-KEY_REQUIRED = {
-    "index", "label", "row", "col",
-    "x_u", "y_u", "w_u", "h_u",
-    "centerX_u", "centerX_mm",
-}
+with open(SCHEMA_PATH, encoding="utf-8") as _f:
+    _SCHEMA = json.load(_f)
 
-# 每条键位记录：可选字段（仅异形/阶梯键出现）
-KEY_OPTIONAL = {
-    "stepped", "x2_u", "y2_u", "w2_u", "h2_u",
-    "unionX_u", "unionW_u",
-}
+TOP_FIELDS = set(_SCHEMA["matrix"]["top"])
+KEY_REQUIRED = set(_SCHEMA["matrix"]["keyRequired"])
+KEY_OPTIONAL = set(_SCHEMA["matrix"]["keyOptional"])
+KEY_ALLOWED = KEY_REQUIRED | KEY_OPTIONAL
 
 
 def validate(data):
@@ -43,7 +36,7 @@ def validate(data):
         raise ValueError(
             "顶层出现未识别字段：%s\n"
             "已知字段：%s\n"
-            "新增字段必须先明确其含义与下游用途，禁止静默忽略。"
+            "新增字段请先在 docs/_tools/field_schema.json 登记。"
             % (", ".join(unknown_top), ", ".join(sorted(TOP_FIELDS)))
         )
 
@@ -55,17 +48,16 @@ def validate(data):
     if not isinstance(matrix, list):
         raise ValueError("matrix 字段不是数组")
 
-    allowed = KEY_REQUIRED | KEY_OPTIONAL
     for i, k in enumerate(matrix, 1):
         if not isinstance(k, dict):
             raise ValueError("matrix[%d] 不是对象" % i)
-        unknown = sorted(set(k) - allowed)
+        unknown = sorted(set(k) - KEY_ALLOWED)
         if unknown:
             raise ValueError(
                 "键位 %s（matrix[%d]）出现未识别字段：%s\n"
-                "已知必需字段：%s\n"
-                "已知可选字段（异形键）：%s\n"
-                "新增字段必须先明确其对几何/定位板开孔的影响，禁止静默忽略。"
+                "必需字段：%s\n"
+                "可选字段（异形键）：%s\n"
+                "新增字段请先在 docs/_tools/field_schema.json 登记。"
                 % (repr(k.get("label")), i, ", ".join(unknown),
                    ", ".join(sorted(KEY_REQUIRED)), ", ".join(sorted(KEY_OPTIONAL)))
             )
@@ -79,8 +71,7 @@ def validate(data):
 
 
 if __name__ == "__main__":
-    import json
     with open(sys.argv[1] if len(sys.argv) > 1 else "docs/_generated/matrix.json",
               encoding="utf-8") as f:
         validate(json.load(f))
-    print("✅ matrix.json 字段校验通过")
+    print("✅ matrix.json 字段校验通过（白名单来自 field_schema.json）")

@@ -1,7 +1,9 @@
 // dump-positions.mjs — 列出物理顺序的位置号与键位，供设计 keymap 使用
 import fs from 'node:fs';
+import { validateMatrix } from './matrix_schema.mjs';
 
 const data = JSON.parse(fs.readFileSync('docs/_generated/matrix.json', 'utf8'));
+validateMatrix(data, 'dump-positions'); // 字段白名单：未登记字段直接抛错
 const keys = data.matrix.slice();
 keys.sort((a, b) => (a.y_u - b.y_u) || (a.centerX_u - b.centerX_u));
 keys.forEach((k, i) => { k.pos = i; });

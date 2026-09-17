@@ -1,0 +1,15 @@
+{
+  "_comment": "生成链字段白名单的【单一真相源】。Python（matrix_schema.py）与 JS（kle_schema.mjs / matrix_schema.mjs）两侧都读本文件，避免两套白名单漂移。新增字段必须先在这里登记，否则对应的一跳会直接失败。",
+  "_why": "事故背景：matrix-assign.mjs 曾只取 KLE 的 w/h，静默丢弃阶梯键的第二轮廓 x2/y2/w2/h2，导致主键区 Enter 被下游当成完整矩形、定位板会照错数据开孔。详见 PROJECT_HANDOFF.md §10.2 第 17 条。",
+  "kle": {
+    "_comment": "sketch/keyboard-layout.json（KLE）允许出现的属性。geom = 参与几何计算、必须被显式处理；ignored = 已知但不参与几何计算。",
+    "geom": ["x", "y", "w", "h", "x2", "y2", "w2", "h2"],
+    "ignored": ["a"]
+  },
+  "matrix": {
+    "_comment": "docs/_generated/matrix.json 允许出现的字段。",
+    "top": ["generatedBy", "source", "unitMM", "rows", "cols", "gpioNeeded", "diodes", "keyCount", "matrix"],
+    "keyRequired": ["index", "label", "row", "col", "x_u", "y_u", "w_u", "h_u", "centerX_u", "centerX_mm"],
+    "keyOptional": ["stepped", "x2_u", "y2_u", "w2_u", "h2_u", "unionX_u", "unionW_u"]
+  }
+}
