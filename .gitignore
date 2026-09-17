@@ -84,6 +84,12 @@ research/*
 .research/
 .zmk-research/
 _research/
+_k2dis/
+_k2man/
+_latency_research/
+_vic84/
+_zf/
+_zmkguide/
 
 # --- Secrets / privacy ---
 *.env
