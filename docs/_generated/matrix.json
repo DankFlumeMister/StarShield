@@ -630,7 +630,14 @@
       "w_u": 1.5,
       "h_u": 2,
       "centerX_u": 18.75,
-      "centerX_mm": 357.188
+      "centerX_mm": 357.188,
+      "stepped": true,
+      "x2_u": -0.75,
+      "y2_u": 1,
+      "w2_u": 1.5,
+      "h2_u": 1,
+      "unionX_u": 17.25,
+      "unionW_u": 2.25
     },
     {
       "index": 53,

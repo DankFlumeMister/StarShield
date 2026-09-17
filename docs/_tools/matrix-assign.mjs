@@ -11,22 +11,44 @@ let cy = 0;
 const keys = [];
 for (const row of kle) {
   let x = 0;
-  let pending = { w: 1, h: 1 };
+  // second = 异形键的第二轮廓（KLE 的 x2/y2/w2/h2，用于阶梯键，如主 Enter）。
+  // 默认按 KLE 语义：偏移为 0，尺寸沿用主轮廓。
+  let pending = { w: 1, h: 1, second: null };
   for (const it of row) {
     if (typeof it === 'string') {
-      keys.push({ label: it.replace(/\n/g, '/'), x, y: cy, w: pending.w, h: pending.h });
+      keys.push({ label: it.replace(/\n/g, '/'), x, y: cy, w: pending.w, h: pending.h, second: pending.second });
       x += pending.w;
-      pending = { w: 1, h: 1 };
+      pending = { w: 1, h: 1, second: null };
     } else {
       if (it.x !== undefined) x += it.x;
       if (it.y !== undefined) cy += it.y;
       if (it.w !== undefined) pending.w = it.w;
       if (it.h !== undefined) pending.h = it.h;
+      if (it.x2 !== undefined || it.y2 !== undefined || it.w2 !== undefined || it.h2 !== undefined) {
+        pending.second = {
+          x: it.x2 !== undefined ? it.x2 : 0,
+          y: it.y2 !== undefined ? it.y2 : 0,
+          w: it.w2 !== undefined ? it.w2 : pending.w,
+          h: it.h2 !== undefined ? it.h2 : pending.h,
+        };
+      }
     }
   }
   cy += 1;
 }
 if (keys.length !== 95) throw new Error(`expected 95 keys, got ${keys.length}`);
+
+// 异形（阶梯）键绝不允许被静默丢弃：这里必须显式报出来
+const stepped = keys.filter(k => k.second);
+if (stepped.length) {
+  console.log(`⚠️  检测到 ${stepped.length} 个异形（阶梯）键，第二轮廓已保留：`);
+  for (const k of stepped) {
+    const s = k.second;
+    const ux = Math.min(k.x, k.x + s.x);
+    const uw = Math.max(k.x + k.w, k.x + s.x + s.w) - ux;
+    console.log(`    ${k.label}: 主轮廓 ${k.w}u×${k.h}u @(${k.x},${k.y})；第二轮廓 ${s.w}u×${s.h}u @偏移(${s.x},${s.y})；合并宽度 ${uw}u @x=${ux}`);
+  }
+}
 
 // ---------- 2. 行归属：以键位起始 y 归行（2u 高键归上排，符合矩阵惯例） ----------
 const rowsY = [...new Set(keys.map(k => k.y))].sort((a, b) => a - b);
@@ -34,6 +56,9 @@ const rowOf = new Map(rowsY.map((y, i) => [y, i]));
 for (const k of keys) {
   k.r = rowOf.get(k.y);
   k.cx = +(k.x + k.w / 2).toFixed(2); // 开关中心 X（u）
+  // 注：异形键的轴心沿用【主矩形中心】（如主 Enter 为 18.75u），不取合并区中心。
+  // 理由：列分配按 cx 排序做贪心，改用合并中心会重排整条矩阵的列；
+  // 且 ISO 类 Enter 的轴心装法本身就是落在主矩形上。
 }
 
 // ---------- 3. 矩阵列分配：同一矩阵列内不得出现同一行 ----------
@@ -111,15 +136,28 @@ const json = {
   gpioNeeded: NROW + NCOL,
   diodes: keys.length,
   keyCount: keys.length,
-  matrix: keys.map((k, i) => ({
-    index: i + 1,
-    label: k.label || 'Space',
-    row: k.r, col: assign.get(k),
-    x_u: +k.x.toFixed(3), y_u: +k.y.toFixed(3),
-    w_u: k.w, h_u: k.h,
-    centerX_u: k.cx,
-    centerX_mm: +(k.cx * 19.05).toFixed(3),
-  })),
+  matrix: keys.map((k, i) => {
+    const base = {
+      index: i + 1,
+      label: k.label || 'Space',
+      row: k.r, col: assign.get(k),
+      x_u: +k.x.toFixed(3), y_u: +k.y.toFixed(3),
+      w_u: k.w, h_u: k.h,
+      centerX_u: k.cx,
+      centerX_mm: +(k.cx * 19.05).toFixed(3),
+    };
+    if (!k.second) return base;
+    // 异形键：追加第二轮廓与合并外接盒（定位板开孔用）
+    const s = k.second;
+    const ux = Math.min(k.x, k.x + s.x);
+    const uw = Math.max(k.x + k.w, k.x + s.x + s.w) - ux;
+    return Object.assign(base, {
+      stepped: true,
+      x2_u: +s.x.toFixed(3), y2_u: +s.y.toFixed(3),
+      w2_u: s.w, h2_u: s.h,
+      unionX_u: +ux.toFixed(3), unionW_u: +uw.toFixed(3),
+    });
+  }),
 };
 fs.writeFileSync('docs/_generated/matrix.json', JSON.stringify(json, null, 2) + '\n', 'utf8');
 console.log('\n已写出 docs/_generated/matrix.json');
