@@ -21,7 +21,11 @@
 """
 import json
 import os
+import sys
 import uuid
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import matrix_schema  # noqa: E402  字段白名单校验（禁止静默忽略新字段）
 
 # 确定性 UUID：用 uuid5 从稳定的名字串生成，使重复运行产出**逐字节一致**的文件。
 # 这对「小步可验证、可回退」很重要：重新生成不应产生无意义的 git diff。
@@ -257,6 +261,13 @@ def build_matrix_sheet_file(sheet_uuid, rows, keys, ncol):
 def main():
     with open(SRC, encoding="utf-8") as f:
         data = json.load(f)
+    try:
+        matrix_schema.validate(data)
+    except ValueError as e:
+        sys.exit(f"[matrix.json 字段校验失败] {e}\n"
+                 f"文件：{SRC}\n"
+                 f"若确实新增了字段，请同步更新 docs/_tools/matrix_schema.py 的白名单，"
+                 f"并明确该字段在原理图中的用途。")
     keys = data["matrix"]
     for i, k in enumerate(keys, 1):
         k["index"] = i

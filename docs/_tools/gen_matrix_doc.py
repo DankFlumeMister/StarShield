@@ -4,6 +4,9 @@ import json
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import matrix_schema  # noqa: E402  字段白名单校验（禁止静默忽略新字段）
+
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
@@ -13,6 +16,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 SRC = os.path.join(ROOT, "docs", "_generated", "matrix.json")
 
 data = json.load(open(SRC, encoding="utf-8"))
+try:
+    matrix_schema.validate(data)
+except ValueError as e:
+    sys.exit(f"[matrix.json 字段校验失败] {e}\n"
+             f"文件：{SRC}\n"
+             f"若确实新增了字段，请同步更新 docs/_tools/matrix_schema.py 的白名单，"
+             f"并明确该字段在原理图中的用途。")
 keys = data["matrix"]
 nrow, ncol = data["rows"], data["cols"]
 
