@@ -101,6 +101,15 @@ private/
 PROJECT_HANDOFF.md
 docs/_internal/
 
+# --- 生成器的中间产物 ---
+# `docs/_generated/` 里**只有 matrix.json 入库**（它是生成链的输入真相源，已跟踪）。
+# 其余都是「生成器 → merge 脚本」的一次性中间文件，例如 gen_matrix_doc.py 产出的
+# matrix-doc-tables.md（由 merge_matrix_doc.py 合并进 docs/matrix-assignment.md）。
+# 这类文件每次重跑生成器都会重新出现 ⇒ 不忽略的话 git status 永远不干净，
+# 而「重跑生成器后 git status 对 tracked 文件无差异」正是本项目的确定性判据。
+docs/_generated/*
+!docs/_generated/matrix.json
+
 # --- 第三方参考源（无许可证，仅本地学习，不入库）---
 hardware/pcb/reference/
 
