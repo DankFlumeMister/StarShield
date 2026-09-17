@@ -70,17 +70,23 @@ COMPONENTS = [
     # R_ISET：ICHG = 890 / R_ISET ⇒ 0.5 A。与 USB500 的 500 mA 输入上限相配，
     # 避免「编程 1 A 但永远达不到」的虚标。
     # ⚠️ 不要把值改成社区那三家的 3.9 kΩ：它们的电池只有 200–500 mAh，
-    #    0.23 A 对它们相当于 0.5–0.9C；本项目电池 3000 mAh，照抄会变成 0.077C（约 13 h）。
-    #    R_ISET 应按**C 倍率**换算，不按绝对电流照抄。论证见
-    #    research/battery-charging-community-precedent.md §3 与 power-architecture.md §3.2。
+    #    0.23 A 对它们相当于 0.5–0.9C；本项目电池 10000 mAh（2×5000 并联），
+    #    照抄会变成 0.023C（约 43 h）。R_ISET 应按**C 倍率**换算，不按绝对电流照抄。
+    #    论证见 research/battery-charging-community-precedent.md §3 与 power-architecture.md §3.2。
+    # ⚠️ 0.5 A 对 10000 mAh 只有 0.05C，是「USB500 档下能取到的满值」而**不是快充**；
+    #    想提速必须切 ILIM 档（改 U1.5/U1.6 与 R3/R4），代价见 power-architecture.md §3.5。
     dict(ref="R4", lib="Device:R", value="1.78k",
          fp="Resistor_SMD:R_0603_1608Metric", at=(95.25, 119.38), rot=0,
-         props={"Note": "ICHG=890/1.78k≈0.5A=0.17C@3000mAh，1%"}),
-    # R_TMR：47 kΩ ⇒ t_MAXCHG ≈ 6.25 h。**本项目必须装**（社区 osprey / designguide 同值）：
-    # ICHG 0.5 A 对 3000 mAh，仅 CC 段就约 6.2 h > 内部默认 5 h ⇒ 不装会在充满前被安全定时器掐断。
-    dict(ref="R10", lib="Device:R", value="47k",
-         fp="Resistor_SMD:R_0603_1608Metric", at=(95.25, 139.7), rot=0,
-         props={"Note": "R_TMR：6.25h 安全定时，必须装（默认 5h 不够充满 3000mAh）"}),
+         props={"Note": "ICHG=890/1.78k≈0.5A=0.05C@10000mAh，1%"}),
+    # --- R_TMR 已移除（2026-09-17，容量变更为 2×5000 mAh 并联后）-------------
+    # 原值 47 kΩ（t_MAXCHG ≈ 6.25 h）是为 3000 mAh 电芯配的。容量翻到 10000 mAh 后，
+    # **任何 R_TMR 取值都不够**：定时器上限 = 10 × R_TMR(72 kΩ 最大) × K_TMR(60 s/kΩ 最大)
+    # = 43200 s = 12 h（typ 9.6 h），而 ICHG 0.5 A 充满 10000 mAh 需约 20 h。
+    # ⇒ 改为 `TMR` 直接接 VSS，禁用所有安全定时器（数据手册明确支持）。
+    # 依据与代价（含三条替代路线）见 docs/power-architecture.md §3.5。
+    # ⚠️ 这不是「拆掉保护」：定时器是 TI 的额外特性，消费级充电 IC 普遍没有它
+    #    （商用 10000 mAh 键盘里就有 350 mA 充电、需要 28.5 h 的机型）。
+    #    真正的保命线是电芯自带保护板 + 4.2 V 恒压 + 终止电流检测，三者本项目都有。
     # R_TS：10 kΩ 到 VSS ⇒ V_TS = 75 µA × 10 kΩ = 0.75 V，落在
     # V_HOT(300 mV) ~ V_COLD(2100 mV) 窗口内 ⇒ 不使用温度监测
     #（数据手册三处明确写出此法）。代价：放弃电池温度保护。
@@ -103,11 +109,17 @@ COMPONENTS = [
     dict(ref="C3", lib="Device:C", value="4.7uF",
          fp="Capacitor_SMD:C_0603_1608Metric", at=(185.42, 78.74), rot=0,
          props={"Note": "BAT 稳定"}),
+    # --- 电池接口 -----------------------------------------------------------
+    # ⚠️ 电池必须是 **1S2P 一体化电池包**（两块 5000 mAh 共用**一块** PCM），
+    #    不可用两块「各自带保护板」的电芯直接并联：电压差会造成大电流互充，
+    #    且两块 PCM 的过流/过压阈值失配 ⇒ 一块先切断、另一块独自承担全部负载。
+    # ⚠️ 该 PCM 的过流保护阈值必须 >2 A：RGB 全亮峰值约 1.9 A，否则会触发保护断电。
+    #    采购要求与选型见 docs/power-architecture.md §7。
     dict(ref="J2", lib="Connector_Generic:Conn_01x02", value="B2B-PH-K-S",
          fp="Connector_JST:JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical",
          at=(203.2, 71.12), rot=0,
          props={"MPN": "B2B-PH-K-S(LF)(SN)", "LCSC": "C131337",
-                "Note": "pin1=电池+  pin2=GND（⚠️ 极性不可反）"}),
+                "Note": "pin1=电池+  pin2=GND（极性不可反）；须接 1S2P 单 PCM 电池包 10000mAh"}),
 
     # --- 充电指示（~CHG 开漏，充电时拉到 VSS）--------------------------------
     dict(ref="R6", lib="Device:R", value="1.5k",
@@ -170,7 +182,6 @@ CONN = {
     "R3.1": "ILIM", "R3.2": "GND",
     "R4.1": "ISET", "R4.2": "GND",
     "R5.1": "TS", "R5.2": "GND",
-    "R10.1": "TMR", "R10.2": "GND",
 
     # --- U1 BQ24072RGT -----------------------------------------------------
     "U1.1": "TS",          # TS 10k 到 VSS ⇒ 禁用温测
@@ -192,10 +203,16 @@ CONN = {
     "U1.10": "OUT", "U1.11": "OUT",
     "U1.12": "ILIM",
     "U1.13": "VCHG_IN",    # IN —— 经 F1（500 mA 保险丝）后的 USB 输入
-    "U1.14": "TMR",        # TMR 装 R10 = 47 kΩ ⇒ 6.25 h。
-                           # ⚠️ 本项目**必须装**：ICHG 0.5 A 对 3000 mAh，仅 CC 段就约 6.2 h
-                           #    > 内部默认 5 h ⇒ 悬空会在充满前被安全定时器掐断（早期版本搞错过）。
-                           #    社区 osprey / designguide 亦为 47 kΩ。
+    "U1.14": "GND",        # TMR 接 VSS = **禁用所有安全定时器**（数据手册原文支持）。
+                           # ⚠️ 电池改为 2×5000 mAh 并联（10000 mAh）后，这是唯一可行接法：
+                           #    ICHG 0.5 A 充满 10000 mAh 约需 20 h，而定时器**最长**
+                           #    只能编到 10 × 72 kΩ × 60 s/kΩ = 12 h（typ 9.6 h），
+                           #    内部默认仅 5 h ⇒ 任何 R_TMR 都会在中途掐断，
+                           #    结果「永远只用到约一半容量」（9.6 h × 0.5 A = 4800 mAh）
+                           #    且 ~CHG 以 2 Hz 闪烁，是极难排查的间歇故障。
+                           #    替代路线（切 ILIM 档提电流 / 接受插两次）见
+                           #    docs/power-architecture.md §3.5。
+                           # ⚠️ 不要在本行填网名 "TMR" —— 那会让 R_TMR 重新变成必需件。
     "U1.15": "GND",        # TD 接 VSS = 使能充电终止（数据手册要求不可悬空）
     "U1.16": "ISET",
     "U1.17": "GND",        # 散热焊盘 EP
@@ -245,10 +262,11 @@ NOTES = [
      "StarShield 电源子图 —— 由 docs/_tools/gen_power_sch.py 自动生成，请勿手改；"
      "改电路请改 docs/_tools/power_design.py。依据：docs/power-architecture.md / docs/bq24072-pinout.md"),
     (25.4, 165.1,
-     "【取值依据】U1=BQ24072RGT。ICHG = 890 / R_ISET = 0.5 A（=0.17C @3000mAh）；"
-     "EN2=0 且 EN1=1 选 USB500 档（输入上限 500 mA）；~CE 接 VSS 常开；TD 接 VSS 使能充电终止；"
-     "TS 经 10k 到 VSS 禁用温度监测；TMR 装 47k（6.25h 安全定时，默认 5h 不够）；"
-     "VBUS 经 F1（500mA）后进 IN。取值与社区成熟方案对照见 docs/power-architecture.md 3.4"),
+     "【取值依据】U1=BQ24072RGT。电池 = 2x5000mAh 并联（1S2P 共用一块 PCM，共 10000mAh）。"
+     "ICHG = 890 / R_ISET = 0.5 A（=0.05C @10000mAh）；EN2=0 且 EN1=1 选 USB500 档（输入上限 500 mA）；"
+     "~CE 接 VSS 常开；TD 接 VSS 使能充电终止；TS 经 10k 到 VSS 禁用温度监测；"
+     "TMR 接 VSS 禁用所有安全定时器（充满 10000mAh 约需 20h，超出定时器 12h 上限）。"
+     "VBUS 经 F1（500mA）后进 IN。容量与商用键盘对照见 docs/power-architecture.md 3.5"),
     (25.4, 173.99,
      "【电源路径】负载必须接 OUT 而不是 BAT（ADR-0002）。OUT 稳压到 VBAT + 225 mV，"
      "满电时 OUT 约 4.4 V。VLED 由 OUT 经 Q1 门控 —— 属电池直供，不含任何升压（ADR-0007 / ADR-0005）"),
@@ -257,8 +275,10 @@ NOTES = [
      "VBAT - VOUT 超过该值并持续 250 us 即切断 OUT 并在 60 ms 后重试 "
      "=> 固件必须把 RGB 峰值限制在约 1 A（docs/power-architecture.md 5.2）"),
     (25.4, 191.77,
-     "【连接器约束】J2 为 JST-PH 2.0，额定 2 A（限 AWG #24 条件）。RGB 全亮峰值约 2.4 A 超过该额定，"
-     "不可靠接插件承载全亮电流；pigtail 请指定 AWG #24"),
+     "【电池与连接器约束】J2 为 JST-PH 2.0，额定 2 A（限 AWG #24 条件）。RGB 全亮峰值约 2.4 A 超过该额定，"
+     "pigtail 请指定 AWG #24。电池须为 1S2P 一体化包（两块 5000mAh 共用一块 PCM），"
+     "不可用两块各自带保护板的电芯直接并联（会互充，且两块保护板阈值失配）；"
+     "PCM 的过流保护阈值必须大于 2A，否则 RGB 全亮会触发保护断电"),
     (25.4, 200.66,
      "【门控拓扑 C（ADR-0005，照抄 kurtis-lew/Conejo）】Q1 的 S 必须接电源轨 OUT、D 接负载轨 VLED —— "
      "P-MOS 体二极管阳极在 D，反接会让 LED 轨经体二极管常通，门控失效。"
@@ -269,5 +289,6 @@ NOTES = [
      "详见 docs/power-architecture.md 第 6 节待办"),
     (25.4, 218.44,
      "【投板后必须实测】1) AO3401A 在 Vgs 约 -0.9 V 时的关断漏电（标 UNVERIFIED）"
-     "2) RGB 峰值电流下 OUT 压降是否仍在 250 mV 以内 3) 深睡整机电流（目标约 20 uA）"),
+     "2) RGB 峰值电流下 OUT 压降是否仍在 250 mV 以内 3) 深睡整机电流（目标约 20 uA）"
+     "4) TMR 接 VSS 后充电能否正常走到 4.2 V 并靠终止电流判据结束（安全定时器已禁用）"),
 ]
