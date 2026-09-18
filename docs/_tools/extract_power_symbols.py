@@ -36,6 +36,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 OUT = os.path.join(ROOT, "docs", "_tools", "power_symbols.json")
 
 # 需要导出的符号（库名, 符号名）。库名即 .kicad_sym 文件名，也是原理图里的库前缀。
+# ⚠️ 文件名虽叫 power_symbols.json，实际是**整个工程的符号缓存**
+#    （B2 控制板子图起共用一份；改名会牵连生成器与文档，保持原名）。
 WANTED = [
     ("Battery_Management", "BQ24072RGT"),
     ("Connector", "USB_C_Receptacle_USB2.0_16P"),
@@ -44,10 +46,14 @@ WANTED = [
     ("Device", "Fuse"),
     ("Device", "LED"),
     ("Connector_Generic", "Conn_01x02"),
+    ("Connector_Generic", "Conn_01x12"),     # B2：nice!nano 排针（每列一个，对应 Mill-Max 1x12 插座）
     ("Transistor_FET", "2N7002"),
     ("Transistor_FET", "AO3401A"),
+    ("74xx", "74HC595"),                     # B2：列驱动（3 颗级联，见 ADR-0008 修订）
+    ("Switch", "SW_SP3T"),                   # B2：三档模式开关（封装 Button_Switch_SMD:SW_SP3T_PCM13）
     ("power", "GND"),
     ("power", "VBUS"),
+    ("power", "VCC"),                        # B2：nice!nano 3.3V 轨（595 供电）
     ("power", "PWR_FLAG"),
 ]
 

@@ -46,6 +46,7 @@ SHEETS = [
     ("sheet:matrix_r234", "矩阵行 R2-R3", "matrix/matrix_r234.kicad_sch"),
     ("sheet:matrix_r45", "矩阵行 R4-R5", "matrix/matrix_r45.kicad_sch"),
     ("power:sheet:power", "电源 / 充电 / RGB 门控", "power/power.kicad_sch"),
+    ("control:sheet:control", "控制板 / MCU / 595 / 模式开关", "control/control.kicad_sch"),
 ]
 
 
