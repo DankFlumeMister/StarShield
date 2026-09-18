@@ -99,6 +99,7 @@ private/
 
 # --- 内部文件（不随开源仓库发布）---
 PROJECT_HANDOFF.md
+PROJECT_HANDOFF_HISTORY.md
 docs/_internal/
 
 # 交接层里那两份**未清洗的原始调研报告**：清洗版已作为 research/*.md 入库，
