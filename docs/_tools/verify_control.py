@@ -51,6 +51,11 @@ ALLOWED_WARNINGS = {
     ("footprint_link_issues", "J3B"),
 }
 
+# 按【类型】整体豁免的违规（不细分对象）：
+#   power_pin_not_driven —— GND 的 PWR_FLAG 在电源子图（全局网只能有一个 power output，
+#     在本图再加会触发 ERC [pin_to_pin] error）⇒ 单图视角下 GND 无驱动源是预期。
+ALLOWED_WARNING_KINDS = {"power_pin_not_driven"}
+
 
 def find_kicad_cli():
     env = os.environ.get("KICAD_CLI")
@@ -195,8 +200,9 @@ def main():
         check("OUT 跨图连通（J3B.RAW + 电源子图 U1/Q1/R6/R7/C2）",
               ("J3B", "1") in got_root.get("OUT", set())
               and {"U1", "Q1", "R6", "R7", "C2"} <= {r for r, _ in got_root.get("OUT", set())})
-        check("LED_DIN 单端（RGB 子图尚未绘制，仅 J3A.1）",
-              got_root.get("LED_DIN") == {("J3A", "1")},
+        # 2026-09-18 M5 后：RGB 子图已绘制，LED_DIN 的另一端是 LED1.DIN
+        check("LED_DIN 跨图连通（J3A.1 + RGB 子图 LED1.DIN）",
+              got_root.get("LED_DIN") == {("J3A", "1"), ("LED1", "2")},
               str(sorted(got_root.get("LED_DIN", set()))))
 
     # ------------------------------------------------------------------
@@ -253,10 +259,13 @@ def main():
     print("D. ERC 闸门（控制子图单图）")
     print("=" * 66)
     violations = []
+    err_violations = []
     for block in erc.split("["):
         if "]" not in block:
             continue
         kind = block.split("]")[0]
+        if not re.fullmatch(r"[a-z_]+", kind):
+            continue        # 引脚描述里的方括号（如 [1, Passive, Line]）不是违规类型
         if kind not in ("isolated_pin_label", "footprint_link_issues",
                         "lib_symbol_mismatch", "endpoint_off_grid", "pin_not_connected",
                         "similar_labels", "label_dangling"):
@@ -270,15 +279,21 @@ def main():
             # 控制子图坐标应全部对齐 1.27 网格；出现即按失败处理
             violations.append((kind, obj))
             continue
+        if kind in ALLOWED_WARNING_KINDS:
+            continue
         if not any(kind == k and o in obj for k, o in ALLOWED_WARNINGS):
             violations.append((kind, obj))
+            if "; error" in block[:200]:
+                err_violations.append((kind, obj))
     n_viol = len(violations)
     check(f"ERC：无未豁免 warning（{n_viol} 条）", n_viol == 0, str(violations[:5]))
+    # ⚠️ 汇总行的 Errors 计数会把「已豁免」的 power_pin_not_driven 算进去
+    #    （GND 的 PWR_FLAG 在电源子图，全局网只能有一个 power output）
+    #    ⇒ 判据必须是「未豁免的 error 级违规 = 0」。
     m = re.search(r'Errors\s+(\d+)\s+Warnings\s+(\d+)', erc)
-    if m:
-        check("ERC 0 error", m.group(1) == "0", f"errors={m.group(1)}, warnings={m.group(2)}")
-    else:
-        check("ERC 汇总行解析", False, "报告中未找到汇总行")
+    check("ERC：未豁免的 error 级违规 = 0", not err_violations,
+          (f"报告原始 errors={m.group(1)} warnings={m.group(2)}；" if m else "")
+          + str(err_violations[:3]))
 
     print("=" * 66)
     if fails:

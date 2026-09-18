@@ -199,13 +199,17 @@ GLOBAL_NETS = {"OUT", "RGB_PWR_EN", "ROW0", "ROW1", "ROW2", "ROW3", "ROW4", "ROW
                "COL15", "COL16", "COL17", "LED_DIN"}
 
 # ---------------------------------------------------------------------------
-# PWR_FLAG：单图视角下，VCC 与 GND 两个电源网在本子图内都只有 passive 引脚
-#   （真实驱动源 —— J3B.16 与电源子图 GND —— 分别是 passive 引脚/在别的图上）
-#   ⇒ 各需一个 PWR_FLAG，否则 ERC [power_pin_not_driven] error。
+# PWR_FLAG：VCC 网在本子图内只由 J3B.16（passive）驱动，没有 power_out 引脚
+#   ⇒ 需要一个 PWR_FLAG，否则单图 ERC [power_pin_not_driven] error。
+#
+# ⚠️ **GND 不要在本图加 flag**：GND 是全局电源网，电源子图已经有一个 PWR_FLAG。
+#    全局网上出现第二个 power output 会触发 ERC [pin_to_pin] error
+#    （「Power output 与 Power output 已连接」，2026-09-18 M5 时实测）。
+#    代价：单图视角下 GND 无驱动源 ⇒ control/verify 的 ERC 豁免里已把
+#    power_pin_not_driven 列为预期（真实驱动源在电源子图）。
 # ---------------------------------------------------------------------------
 PWR_FLAGS = [
     dict(net="VCC", at=(101.6, 116.84)),
-    dict(net="GND", at=(33.02, 171.45)),
 ]
 
 # ---------------------------------------------------------------------------

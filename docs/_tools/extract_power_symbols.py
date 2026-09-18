@@ -51,6 +51,7 @@ WANTED = [
     ("Transistor_FET", "AO3401A"),
     ("74xx", "74HC595"),                     # B2：列驱动（3 颗级联，见 ADR-0008 修订）
     ("Switch", "SW_SP3T"),                   # B2：三档模式开关（封装 Button_Switch_SMD:SW_SP3T_PCM13）
+    ("LED", "SK6812MINI-E"),                 # M5：per-key RGB 灯珠（派生符号，extends "SK6812"）
     ("power", "GND"),
     ("power", "VBUS"),
     ("power", "VCC"),                        # B2：nice!nano 3.3V 轨（595 供电）

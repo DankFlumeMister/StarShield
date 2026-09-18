@@ -34,11 +34,15 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 OUT_DIR = os.path.join(ROOT, "hardware", "pcb", "StarShield")
 OUT = os.path.join(OUT_DIR, "Starshield.kicad_sch")
 
-# 根图要用的图纸：矩阵三张（各 60×40）+ 电源一张。A4 装不下（A4 横放只有 297×210 mm），用 A3。
+# 根图要用的图纸：矩阵三张 + 电源 + 控制 + RGB，共 6 张（各 60×40）。
+# A4 装不下（A4 横放只有 297×210 mm），用 A3；6 张竖排（6×60=360）也超出 A3 高度 297
+# ⇒ 改为 **3 列 × 2 行** 网格布置。
 PAPER = "A3"
 SHEET_W, SHEET_H = 60.0, 40.0
 X0, Y0 = 60.0, 60.0
+COL_STEP = 70.0
 ROW_STEP = 60.0
+PER_ROW = 3
 
 # (子图内的 uuid 名, 显示名, Sheetfile)
 SHEETS = [
@@ -47,14 +51,15 @@ SHEETS = [
     ("sheet:matrix_r45", "矩阵行 R4-R5", "matrix/matrix_r45.kicad_sch"),
     ("power:sheet:power", "电源 / 充电 / RGB 门控", "power/power.kicad_sch"),
     ("control:sheet:control", "控制板 / MCU / 595 / 模式开关", "control/control.kicad_sch"),
+    ("rgb:sheet:rgb", "RGB（95 颗 SK6812MINI-E 数据链）", "rgb/rgb.kicad_sch"),
 ]
 
 
 def build():
     body = []
     for i, (uname, title, file) in enumerate(SHEETS):
-        x = X0
-        y = Y0 + i * ROW_STEP
+        x = X0 + (i % PER_ROW) * COL_STEP
+        y = Y0 + (i // PER_ROW) * ROW_STEP
         body.append(
             f'\t(sheet (at {x:.2f} {y:.2f}) (size {SHEET_W:.2f} {SHEET_H:.2f}) (fields_autoplaced yes)\n'
             f'\t\t(stroke (width 0.1524) (type solid)) (fill (color 0 0 0 0.0000))\n'
