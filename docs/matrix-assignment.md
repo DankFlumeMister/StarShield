@@ -322,10 +322,10 @@ ERC 结果：**0 error**。剩余警告为预期项，见 4.3。
 | --- | --- | --- |
 | ~~M1~~ | ~~核实 nice!nano v2 与 SuperMini 的实际可用 GPIO 数~~ | ✅ **已完成：nice!nano v2 = 21 GPIO**（见 `docs/controller-and-battery-facts.md`）；SuperMini 引脚数仍 UNVERIFIED |
 | M2 | 决策：直接 GPIO 扫描 vs 74HC595 移位寄存器，并写 ADR | 影响 PCB 元件数与固件驱动方案（**当前最关键设计决策**） |
-| M3 | 补充控制板子图（控制器 footprint、行列引出、`ext-power` 引脚） | 消除 `isolated_pin_label`，并使工程可用于布局 |
-| M4 | 补充电源子图（BQ24072 充电 + 电源路径 + SPDT 开关 + 电池接口） | 见 ADR-0002；⚠️ TS 引脚参数待人工查 TI 文档 |
-| M5 | 补充 RGB 子图（95 颗 SK6812MINI 数据链 + PMOS 门控） | 见 ADR-0005；注意数据链需按物理顺序串接，与矩阵列分配无关 |
-| M6 | 补全封装指定（轴座、二极管、LED、控制器、Type-C） | 进入 PCB 布局的前置条件 |
+| ~~M3~~ | ~~补充控制板子图（控制器 footprint、行列引出、`ext-power` 引脚）~~ | ✅ **已完成（2026-09-18，B2）**：`hardware/pcb/StarShield/control/control.kicad_sch` |
+| ~~M4~~ | ~~补充电源子图（BQ24072 充电 + 电源路径 + 电池接口）~~ | ✅ **已完成（2026-09，B1）**：`power/power.kicad_sch`（ADR-0002；不设断电开关，见 ADR-0010） |
+| ~~M5~~ | ~~补充 RGB 子图（95 颗 SK6812MINI 数据链 + PMOS 门控）~~ | ✅ **已完成（2026-09-18）**：`rgb/rgb.kicad_sch`；**链序 = 键位 index 顺序**（与矩阵列分配无关，见 `docs/_tools/rgb_design.py`）；门控本体在电源子图（ADR-0005） |
+| M6 | 补全封装指定（轴座、二极管、LED、控制器、Type-C、Mill-Max 插座） | 进入 PCB 布局的前置条件；⚠️ RGB 灯珠的型号-封装对应与贴装方向标 UNVERIFIED |
 
 > 说明：第 2 节的表格由 `docs/_tools/gen_matrix_doc.py` 生成并注入到
 > `<!-- BEGIN GENERATED TABLES -->` 标记区间内，**请勿手工编辑该区间**；
