@@ -282,13 +282,15 @@ def hole_instance(ref, x, y):
 # --------------------------------------------------------------------------
 LAYERS = """	(layers
 		(0 "F.Cu" signal)
-		(31 "B.Cu" signal)
+		(4 "In1.Cu" signal)
+		(6 "In2.Cu" signal)
+		(2 "B.Cu" signal)
 		(9 "F.Adhes" user "F.Adhesive")
 		(11 "B.Adhes" user "B.Adhesive")
 		(13 "F.Paste" user)
 		(15 "B.Paste" user)
-		(5 "F.SilkS" user "F.SilkS")
-		(7 "B.SilkS" user "B.SilkS")
+		(5 "F.SilkS" user)
+		(7 "B.SilkS" user)
 		(1 "F.Mask" user)
 		(3 "B.Mask" user)
 		(17 "Dwgs.User" user "User.Drawings")
@@ -302,6 +304,13 @@ LAYERS = """	(layers
 		(35 "F.Fab" user)
 		(33 "B.Fab" user)
 	)"""
+# ⚠️ **4 层板（2026-09-19 用户定）**：
+#    - 层号与顺序**照抄 KiCad 自己写出来的形式**（不是按惯例猜）：`B.Cu` 的 id 是 **2**、不是 31；
+#      `In1.Cu`=4、`In2.Cu`=6。KiCad 也会把 F.SilkS/B.SilkS 的别名串去掉 —— 一并照抄。
+#    - **不要用 MCP `add_layer` 加层**：层数属设计数据，必须由生成器产出，
+#      否则下一次 `gen_pcb.py` 会把内层覆盖掉（本轮实测踩过）。
+#    - 叠层规划：**In1.Cu = GND 平面、In2.Cu = VLED 平面**，两个外层放信号；
+#      VLED 的 2.4 A 靠 In2 平面承载（见 handoff §9 B4）。
 
 
 def header(title, w, h, note):
