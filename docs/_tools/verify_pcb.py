@@ -15,6 +15,7 @@
 """
 import collections
 import math
+import json
 import os
 import re
 import subprocess
@@ -38,7 +39,11 @@ ROOT_SHEET = os.path.join(PCB, "Starshield.kicad_sch")
 
 # ⚠️ DRC 豁免：kind -> 理由。带 `❓` 的表示尚未根因确认，投板前必须回看。
 DRC_ALLOW = {
-    "unconnected_items": "本产物是「已摆位、未布线」的初始板，未连接属预期（499 项）",
+    "unconnected_items": "已布线（4 层，Freerouting）但**未完成**：剩 6 条未连通 —— "
+                         "VLED 断口 1、COL0 1、D17-A 2、VBUS 1、另 1。投板前必须清零；"
+                         "详见 handoff §9 B4 的收尾清单。",
+    "holes_co_located": "COL0 在 (3.6867, 62.8397) 有两个重合过孔（手工补线时多加了一个），"
+                        "电气无害，属冗余；投板前删掉其一。",
     "courtyards_overlap": "per-key 布局必然：灯珠/二极管就在轴体自身的 courtyard 内（实测 96 项）",
     "lib_footprint_mismatch": "自画封装（MX 热插拔座 8 档）与库内版本差异，与 ERC 噪音同类",
     "lib_footprint_issues": "同上，95 个自画封装",
@@ -326,14 +331,38 @@ def main():
     print("=" * 70)
     print("G. VLED 网络类（唯一 2–3 A 路径）")
     print("=" * 70)
+    # ⚠️ **KiCad 8+ 把网络类放在「工程文件」里**（`.kicad_pro` 的 `net_settings.classes`）。
+    #    板文件里的 `(net_class ...)` 只是旧格式 —— **KiCad 保存时会把它挪走**：
+    #    2026-09-19 实测，布线 + 铺铜后板文件里 `(net_class` 计数变成 **0**，
+    #    本组断言因此假失败。⇒ 两处都查（板文件优先，兼容旧产物）。
     txt = open(BOARD, encoding="utf-8").read()
+    cls_src, cls_txt, cls_w, cls_has_net = "", "", None, False
     m = re.search(r'\(net_class "VLED"[^\n]*\n(?:[^\n]*\n)*?\t\)', txt)
-    check("存在 VLED 网络类", m is not None)
     if m:
-        tw = re.search(r"\(trace_width ([-\d.]+)\)", m.group(0))
-        check("VLED 走线宽 ≥ 1.5 mm", tw and float(tw.group(1)) >= 1.5,
-              f"{tw.group(1) if tw else '?'} mm")
-        check("VLED 网归入该类", re.search(r'\(add_net "VLED"\)', m.group(0)) is not None)
+        cls_src, cls_txt = "板文件", m.group(0)
+        tw = re.search(r"\(trace_width ([-\d.]+)\)", cls_txt)
+        cls_w = float(tw.group(1)) if tw else None
+        cls_has_net = re.search(r'\(add_net "VLED"\)', cls_txt) is not None
+    else:
+        pro = os.path.splitext(BOARD)[0] + ".kicad_pro"
+        if os.path.exists(pro):
+            with open(pro, encoding="utf-8") as f:
+                proj = json.load(f)
+            ns = proj.get("net_settings", {})
+            for c in ns.get("classes", []):
+                if c.get("name") == "VLED":
+                    cls_src = "工程文件"
+                    cls_txt = "VLED"
+                    cls_w = c.get("track_width")
+                    break
+            pats = [p for p in (ns.get("netclass_patterns") or [])
+                    if p.get("pattern") == "VLED"]
+            cls_has_net = any(p.get("netclass") == "VLED" for p in pats)
+    check("存在 VLED 网络类", bool(cls_txt), f"来源：{cls_src or '未找到'}")
+    if cls_txt:
+        check("VLED 走线宽 ≥ 1.5 mm", cls_w is not None and cls_w >= 1.5, f"{cls_w} mm")
+        check("VLED 网归入该类", cls_has_net,
+              "" if cls_has_net else "netclass_patterns 里 VLED 未指向 VLED 类")
 
     print("=" * 70)
     print("H. DRC（kicad-cli pcb drc）")
