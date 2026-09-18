@@ -27,16 +27,29 @@
   Keychron 的 2.4G 实现依赖**闭源二进制**（Nordic ESB 标注 `LicenseRef-Nordic-5-Clause`、
   Realtek 预编译库），ZMK 官方 FAQ 亦以**许可证**理由明确拒绝。
   ⇒ **障碍是法律而非技术**，本项目不应为此 fork ZMK。真 2.4GHz 推迟到后续版本。
+  ⚠️ **末句已两次修正（2026-09-18）**：① 用户指出「键盘本来就是 nRF52840，Dongle 若也用 nRF52840，
+  两端同芯片」⇒ **Nordic-5-Clause 允许用于 Nordic 芯片，法律障碍对本组合不成立**；
+  ② **「ZMK 做不了 ESB / 零先例」也是错的** —— **Keychron 的官方 ZMK fork（`keychron_bpro` 分支）
+  已商用化实现了第三条 ESB 输出**（nRF52840 自身射频、Zephyr 开源控制器 + RADIO 分时复用、
+  扩展 outputs 行为、`&out OUT_24G`，单镜像免重刷；详见 `zmk-tri-mode-community-precedent.md` §4c
+  与 **ADR-0001 修订段末的复核小节**）。
+  ⇒ **结论不变**（第一版不做原生 2.4G），但理由改为「代价结构」而非「做不到/违法」：
+  需 fork ZMK + 改 Zephyr + 自写传输/配对/跳频/省电 + 自写 Dongle 端（Keychron 的接收器疑似 Realtek），
+  打破「新手用原版 ZMK 构建」的教程前提；触发条件 = v1 实测延迟不达标
 - **「2.4G」的含义**：本项目所说的「2.4G」= **经 BLE Dongle 连接**（BLE 本身工作在 2.4GHz），
   **不是**原生 2.4GHz 专有射频。
 
 ## 硬件
 
-- **控制器模块**：Body 用 nice!nano v2（SMT 版或通孔版均可）。Dongle 用 Seeed XIAO nRF52840。
+- **控制器模块**：Body 用 nice!nano v2（SMT 版或通孔版均可）。
+  **Dongle 用 ESP32-S3**（ESP-IDF 官方示例 `esp_hid_host` + `tusb_hid` 拼装，见 **ADR-0011**）。
+  ⚠️ 本行旧值「Dongle 用 Seeed XIAO nRF52840」是 ADR-0011 之前的旧方案，**已废弃**
+  —— 旧方案走 ZMK 分体 central 路线，会让键盘离开 Dongle 变砖且失去蓝牙/有线两档。
 - **兼容性**：PCB footprint 同时兼容 nice!nano v2 与 SuperMini nRF52840。
 - **焊接**：PCB 设计通孔焊盘 + Mill-Max 插座，模块可插拔。
 - **轴体**：MX 轴 + 热插拔座。
-- **充电**：BQ24072 做在主 PCB 上（1.5A 充电 + 电源路径管理），不使用控制器模块板载充电。
+- **充电**：BQ24072 做在主 PCB 上（线性充电 + 电源路径管理），不使用控制器模块板载充电。
+  ⚠️ 本行旧值「1.5A 充电」指的是**芯片编程上限**；**实际已定 ≈1.0 A（ICHG）**，见下「充电电流」。
 - **电池**：**10000mAh（2×5000mAh 并联，1S2P）** 3.7V LiPo，一体化包共用**一块**保护板。接口 JST-PH 2.0。
 - **连接模式开关**：三档拨片开关（SP3T）选择 **2.4G（Dongle）/ 蓝牙 / 有线**。
   用 ZMK 上游原生机制读取（`zmk,kscan-gpio-direct` + `toggle-mode` + `zmk,kscan-sideband-behaviors`），
@@ -74,8 +87,11 @@
 - **拓扑要点**：电池只接 `BAT` 引脚；**系统负载必须接 `OUT`**，由 IN/BAT 中较高者供电。
   若把负载挂到 `BAT` 上会绕过电源路径管理，退化回 ADR-0002 要避免的「边充边放」。
   详见 `docs/power-architecture.md`。
-- **充电电流**：1.5A ÷ 3.0Ah = 0.5C，不超电池规格；但线性充电器在 1.5A 时耗散约 2W，
-  故**实际建议编程 0.5–1.0A**（R_ISET：1.0A=890Ω / 0.5A=1.78kΩ）。
+- **充电电流**：⚠️ 本节旧值「1.5A ÷ 3.0Ah = 0.5C」建立在 **3000 mAh** 电池上，**已被推翻**。
+  现况：电池 **10000 mAh（2×5000 并联）** ⇒ **ICHG ≈ 1.0 A = 0.10C**（`R_ISET` = **887 Ω**，
+  输入走 ILIM 档 ≈1.0 A），充满约 **10 h**；**1.5 A 只是芯片编程上限**，不是本板能拿到的电流
+  （线性充电 1.0 A 时耗散约 1.3 W，`Tj` ≈ 83 °C）。
+  论证与商用对标见 `docs/power-architecture.md` §3.1 / §3.7。
 - **物理断电**：⚠️ 原「SPDT 串在电池→BAT 之间，额定 ≥2A」的方案**已推翻**。
   **现方案：不设电池断电开关**（用户决定，走成熟路线）。充电 IC 保持 `BQ24072`，
   电池始终接通；关机 = 有线档 + 拔线 + ZMK 深睡；存放 = 拔 JST。见 **ADR-0010**（已决定）。
@@ -127,17 +143,68 @@
 
 ### 🔴 仍需用户决策
 
-- **P15 `F1` 保险丝额定值**：**已随输入档位一并改为 1.5 A**（原 500 mA 是配 0.5 A 档的；输入切到 1.0 A 后 500 mA 会必然熔断）。仍待按所选料号的降额曲线复核
-- **几何项**：`G2` PCB 板框外扩量、`G3` 安装孔数量与位置、`G4` 外壳分件方案、
-  `G6` 定位板是否纳入第一版。见 `docs/hardware-geometry.md` §4
-- **固件侧**：`P12` 是否开启 `ZMK_RGB_UNDERGLOW_EXT_POWER`（建议开）、
-  `C4` 是否引入 ZMK Studio、`C6` 是否并行用树莓派 MIT 方案先验证 Dongle 链路
-- **ZMK config 是否独立仓库**
+- ~~**P15 `F1` 保险丝额定值**~~ ⇒ ✅ **已定案（2026-09-18）：2 A hold 的 1812 自恢复保险丝（`MF-MSMF200`）**。
+  取值史 500 mA → 1.5 A → **2 A**。⚠️ **1.5 A 被否决**：Bourns MF-MSMF 降额表显示 `MF-MSMF150/24X`
+  在 **60 °C 环境下降额后 Ihold 仅 1.00 A**，恰好等于工作电流 ⇒ 零余量；70 °C 时 0.88 A ⇒ 会误断。
+  2 A 档 60 °C 仍 1.50 A（余量 50%）、85 °C 1.25 A（余量 25%）。压降最大 80 mV ⇒ 输入 ≥4.92 V，
+  远高于 VIN-DPM 上限 4.63 V。封装 0603 → **1812**（`Fuse:Fuse_1812_4532Metric` 已核实存在）。
+  🟡 残留：LCSC 料号待 BOM 补；若要求 ≥16 V 需另选 2 A/16 V 的 1812 PTC
+- **几何项**：🟡 **G2 / G6 已定（2026-09-18）**（见下「已决策」）；**G3** 只定数量与规格
+  （8 个 / M2），坐标留 B4；**G4** 改为「用户自理分件 / 打印，本项目只产出 3D 模型文件」。
+  逐项分析（含 **G4 原倾向「主键区 + 小键盘」在几何上不成立** 的论证）见
+  **`docs/decision-package-2026-09-18.md`**
+- **固件侧**：~~`C6` 是否并行用树莓派 MIT 方案先验证 Dongle 链路~~ ⇒ **已定（2026-09-18）：不做**
+  （用户：树莓派成本太高）。该风险改由「C5 实现后直接实测」承接 —— 详见下「已决策」
+- **Dongle 架构（方案 A：ESP32-S3 BLE vs 方案 B：nRF52 ESB）** ⇒ 🟡 **已定（2026-09-18）：先验证再定**
+  —— 用户拍板按 **C7** 验证 `efogdev/zmk-esb-endpoint` 的 nRF52840 移植
+  （计划见 `docs/esb-endpoint-validation.md`），通过走 B、失败走 A；B2 不受影响
 
 ### ✅ 已决策（已关闭，勿再当待定）
 
+- ~~`C6` 是否并行用树莓派 MIT 方案先验证 Dongle 链路~~ ⇒ ✅ **已定（用户 2026-09-18）：不做**
+  —— 树莓派 Zero 2 W + 配件成本太高，不值得为一项「架构验证」专门采购。
+  ⚠️ 代价要记清：ADR-0011 最大的未验证项（`esp_hidh` 能否正确解析 **真实 ZMK 键盘** 的
+  HID 报告描述符）**失去了一个低成本提前验证的机会**，只能等 C5 写完 Dongle 固件后直接实测。
+  ⇒ 若届时实测失败，备选仍回到 ADR-0011 附录 B 盘点的几条路线（nRF52840 / ESP32-C3+CH9329，
+  均有许可证障碍）⇒ **建议 C5 一开始就买一颗 ESP32-S3 最小系统板**，把验证提前到「能用 devkit 跑通」
+  的最早时刻，而不是等到 B2/B4 全部完成之后
+- **Dongle 芯片盘点（2026-09-18 调研，佐证 ADR-0011）**：量产键盘的 2.4G 接收器几乎全是
+  **专有协议 + 同厂商配套 SoC**（Telink TLSR8208/8355/8373/8666 为主、Nordic nRF52 次之、
+  TI CC254x/CC264x 较老）；**「BLE HID 主机式 Dongle」在量产界没有先例** —— 我们走这条路
+  是 ZMK 生态约束（ADR-0001）下的必然，与「大电池无开源先例」同类。
+  Telink 官方 Dongle 模式电流 **27 mA**，佐证 USB 供电 dongle 耗 20–30 mA 属行业常态
+  （我们 ESP32-S3 估 15–25 mA 不异常）。完整盘点见 **`docs/adr/0011` 附录 B**
+
+- ~~`C4` 是否引入 ZMK Studio~~ ⇒ ✅ **已定（用户 2026-09-18）：暂不启用**。
+  理由：① 启用机制在 ZMK v0.3.0 与 main 之间不一致（文档写 `studio-rpc-usb-uart` snippet，
+  本地 main 克隆里无该目录，而是 Kconfig `ZMK_STUDIO_TRANSPORT_UART`）⇒ 需先按 v0.3.0 实测；
+  ② Studio 构建强制 `ZMK_BEHAVIORS_KEEP_ALL` ⇒ 固件变大；③ 走 USB，而 USB 通道依赖
+  **未量测**的 G7 开孔。**前提已备好**：95 键 physical layout（`physical_layout0` 的 `keys` 属性）
+  已由 `gen_transform.mjs` 派生 ⇒ 将来启用只差两行配置，届时单独评估。
+  改键位不受影响：改 `starshield.keymap` → 推 CI → 下载新固件
+
+- ~~`G2` PCB 板框外扩量~~ ⇒ ✅ **已定（2026-09-18）：4 mm/边** ⇒ PCB 约 **379 × 127 mm**。
+  ⚠️ 仍可能与 G7（nice!nano USB-C 开孔）联动微调
+- ~~`G6` 定位板是否纳入第一版~~ ⇒ ✅ **已定（2026-09-18）：纳入**。
+  依据：已决定用热插拔座，其常规用法配套定位板（插拔力/侧向力由定位板承担），
+  且能保证键帽高低一致。开孔必须与 PCB 同源生成，异形 Enter 用 `unionX_u / unionW_u`
+- ~~`ZMK config` 是否独立仓库~~ ⇒ ✅ **已定（2026-09-18）：不拆**，维持单仓库。
+  理由：CI 已跑通不动不冒风险；新手教程只需一次 `git clone`；许可证链与「一块板一个仓库」直觉一致。
+  ⚠️ 「补 `zephyr/module.yml` 支持以 module 方式被别人引入」存在结构冲突未解决
+  （module 根目前是 `firmware/`，而 `west.yml` 写的是 `self: path: config`），暂不做
+- **`G4` 外壳分件 / 打印** ⇒ **用户 2026-09-18 定调：由用户自理，本项目只产出 3D 模型文件**。
+  需要他知道的事实：**主键区 15u = 285.75 mm > 打印床 256 mm** ⇒ 主键区至少要被切一刀
+  （论证见 `docs/hardware-geometry.md` §3.1）
+
+- ~~`P12` 是否开启 `ZMK_RGB_UNDERGLOW_EXT_POWER`~~ ⇒ ✅ **已开启且早已落地**
+  （`firmware/boards/shields/starshield/starshield.conf` 第 31 行
+  `CONFIG_ZMK_RGB_UNDERGLOW_EXT_POWER=y`）。**此前挂在待定清单里是文档滞后，不是没做。**
+  语义：RGB 开关联动 `ext-power`，关灯时物理切断 LED 供电（ADR-0005）。
+  ⚠️ 前置依赖 `CONFIG_ZMK_EXT_POWER=y` 亦已开启。
+
 - ~~充电电流档位（P13）~~ ⇒ **已定（2026-09-18）：切到 ILIM 档 —— 输入 ≈1.0 A、充电 ≈1.0 A
-  （0.10C）、充满约 10 h**。`EN2=OUT`/`EN1=GND`、`R_ILIM` 1.6 kΩ、`R_ISET` 887 Ω、`F1` 1.5 A。
+  （0.10C）、充满约 10 h**。`EN2=OUT`/`EN1=GND`、`R_ILIM` 1.6 kΩ、`R_ISET` 887 Ω、
+  `F1` **2 A hold**（P13 定案时的 1.5 A 已被 P15 降额复核否决，见下）。
   ⚠️ **这是本项目唯一主动超出 USB-C 声明之处**（5.1 kΩ 只声明 500 mA）—— 依据是商用同容量
   产品的实测充电区间 **0.035–0.163C**，而 0.5 A 只有 0.049C（下三分之一）。
   见 `docs/power-architecture.md` §3.7 与 `research/large-battery-keyboard-charging-current.md`

@@ -4,6 +4,15 @@
 
 我们决定第一版采用标准 ZMK：Body 经 BLE 连接一块独立的 XIAO nRF52840 Dongle，Dongle 作为 BLE central 插入主机 USB。这样用户获得接近 2.4GHz 的体验，而我们无需维护 ZMK 分支。原生 2.4GHz 推迟到后续版本。
 
+> 📌 **2026-09-18 复核（摘要，详见修订段末「两端都是 nRF52840」一节）**：
+> 上面第一段的三个障碍需要**分级修正** —— 许可证障碍比原文写的**弱**
+> （Nordic-5-Clause 允许用于 Nordic 芯片，本组合两端都是 nRF52840）；
+> 「ZMK 做不了 ESB」**不成立** —— **Keychron 的官方 ZMK fork（`keychron_bpro` 分支）
+> 已在商用产品上实现了第三条 ESB 输出**（Zephyr 开源控制器 + RADIO 分时复用）。
+> **真正的代价**是：fork ZMK + 改 Zephyr + 自写传输/配对/跳频/省电 + 自写 Dongle 端，
+> 与本项目「新手用原版 ZMK 构建」的定位冲突。
+> 结论（第一版不做原生 2.4G）**维持不变**，但理由与 v2 可行性评估均已修正。
+
 ## Consequences
 
 固件保持在上游 ZMK，用户可用 GitHub Actions 构建，ZMK Studio 开箱可用。代价是延迟约 4.25ms（而非 1–3ms），且用户需多携带一个 Dongle。
@@ -161,6 +170,150 @@ Dongle 固件必须自研。** 这是本项目一块**确定要投入的固件�
 ⇒ **结论：Dongle 的延迟优势属于「机制上可能、但未经测量」，不得作为选型理由。**
 要拿它当理由，必须先自建测量装置（Stapelberg 的 Caps Lock LED 往返法可穿过后端 HID 输出报告，
 不需要 GPIO，是可行候选）。
+
+### 2026-09-18 复核：键盘与 Dongle **都是 nRF52840** 时，原生 2.4G（ESB）可行吗？
+
+**触发**：用户指出「键盘芯片（nice!nano v2）本来就是 Nordic nRF52840，Dongle 若也用 nRF52840，
+两端同芯片，是不是就能直接用 Nordic 的 2.4G 了」。这个观察是对的，逼出一次理由复核。
+
+#### ✅ 原文三个障碍的分级修正
+
+| 原文障碍 | 复核结论 |
+| --- | --- |
+| 「ESB 与 BLE 互斥」 | ⚠️ **部分成立**：两栈共用 RADIO 外设，**运行时并发**需要 MPSL 仲裁；但本项目**三档开关天然互斥**（ADR-0009），可在上电时按档位二选一初始化 ⇒ 该障碍**有便宜的绕法**（代价见下） |
+| 「需要 fork ZMK」 | ⚠️ **措辞不准**：ZMK 支持 west module，不必 fork；但必须**在键盘端写一个大自定义模块**（见下）—— 实质负担不变 |
+| 「NCS 许可证限制」 | ❌ **对本研究组合不成立**：Nordic-5-Clause 的限制是「只能用于 Nordic 芯片」，本组合**两端都是 nRF52840** ⇒ 满足。风险点变为：将来若把该固件移植到非 Nordic 芯片，这份代码不能跟着走 |
+
+⇒ **`decisions.md` 里「障碍是法律而非技术」一句按此修正**：法律障碍仅对「两端都是 Nordic 芯片」的组合不成立；
+真正的障碍是工程与维护。
+
+#### 🔴 真正的障碍：ZMK 没有 ESB 传输路径，且全世界零先例
+
+ESB（Enhanced ShockBurst）只是一个**链路层**，要把它变成「键盘 ↔ Dongle 的按键通道」，
+键盘端必须新增一个自定义模块，至少包含：
+
+1. **传输挂载**：ZMK 的按键输出路径只有两条 —— BLE HID（HOGP）与 USB。
+   ESB 要做第三条：把 HID 报告从 ZMK 的行为管线接出来、打包、发走；
+2. **配对 / bond**：ESB 没有 BLE 那套 SMP，地址与密钥交换要**自己设计**，且 Dongle 端实现同一套；
+3. **跳频 / 抗干扰**：ESB 只有固定信道；自适应跳频要自己做（Nordic 的 Gazel 库有 AFH，仍是 Nordic 系许可、仅限 Nordic 芯片）；
+4. **省电调度** —— **最难的一层**。BLE 的连接间隔 / latency 由控制器自动管；
+   ESB 下「键盘何时睡、何时听、如何被唤醒、唤醒后多久能发」全部自己写。
+   商业键盘「1 ms 延迟 + 数月续航」正是厂商在这层手工调出来的结果；
+5. **与三档开关的联动**：若靠「档位互斥、上电决定」绕开 MPSL，则 ZMK 在启动时
+   无条件初始化 BLE —— 要把 BLE 启动做成条件化（本身又是对 ZMK 的改动）；
+   若要**运行时**切档，就得引入 MPSL 多协议仲裁。
+
+且全世界没有「ZMK + ESB」的先例 ~~（本次再查仍是零）~~
+⚠️ **本句已修正（2026-09-18）——「零先例」是错的**：本仓库的调研报告
+`zmk-tri-mode-community-precedent.md` §4a–4c 早已记录了**三个** ZMK + ESB 的实现，
+其中 **Keychron 的官方 ZMK fork 是一个商用在售、非分体、单镜像、运行时三档切换**的完整反例。
+详见下节。修正后的表述是：**先例存在（Keychron，商用级），但没有一个是可直接照搬的
+「上游 ZMK + 独立模块」形态 —— 全部要么 fork ZMK + 改 Zephyr，要么不成熟**。
+与 ADR-0009「键盘侧零自定义固件」「新手可复刻」的定位冲突这一结论不变。
+
+#### ⭐ 更正依据：Keychron 的 ZMK fork 就是「专门做 Nordic 2.4G 的 ZMK 分支」（用户记忆正确）
+
+本仓库 `zmk-tri-mode-community-precedent.md` §4c（此前会话经 GitHub API 逐项核实）记录了
+**`Keychron/zmk`**（zmkfirmware/zmk 的 org fork，49★/73 fork，2022-07 建，最近推送 2026-09-04）：
+
+- **B 系列代码在 `keychron_bpro` 分支**（不在 main）；
+- **2.4GHz 是 nRF52840 自己的射频跑 ESB**，作为 ZMK 的**第三条输出**：
+  `app/Kconfig` 定义 `ZMK_NRF_24G_ECB`（"enabel nordic 24g ecb"，`select NRFX_TIMER2`）
+  与 `ESB_*` 符号，`ZMK_NRF_24G` default y；存在 `app/src/24G/` 目录（内容未读 → UNVERIFIED）；
+- 键位里出现**上游 ZMK 不存在的输出键码**：`&out OUT_24G`、`OUT_BLE`、`OUT_CHG` 等
+  ⇒ Keychron 扩展了 outputs 行为，加了真正的第三传输；
+- 模式开关**不是** ZMK 的 physical-layout 机制，而是 `keychron.dts` 里
+  `zmk,kscan-gpio-direct` 的 GPIO 触点（mac/win、bt、**24g**、charging、charge-done）——
+  **与我们 ADR-0009 的 SP3T 读法同类**；
+- 🔴 关键工程细节：`0001-esb-nrf-fix.patch` **改的是 Zephyr**，不是 app ——
+  `subsys/bluetooth/controller/ll_sw/nordic/lll/lll.c`（用动态中断重接 `RADIO_IRQn`）、
+  `drivers/usb/device/usb_dc_nrfx.c`、`bas.c`
+  ⇒ **他们的 2.4G 栈与 Zephyr 自家的开源 BLE 控制器分时复用同一颗 RADIO**
+  —— 这意味着 Keychron **没有**用 NCS 的闭源 SoftDevice Controller，而是
+  Zephyr 开源控制器 + nrfx 级别的 ESB（`select NRFX_TIMER2`）。许可处境与
+  「NCS 更严格许可」的官方拒绝理由**不是一回事**（⚠️ 该许可结论本身 UNVERIFIED）；
+- **不是分体模式**：无 `zmk,kscan-mock`、无 `CONFIG_ZMK_SPLIT`，单镜像
+  `west build -s app -b keychron -DSHIELD=keychron_b1_us`，BLE 直连与 2.4G **共存于一个固件、
+  无需重刷**（读自 DT/Kconfig/keymap，未上机验证）；
+- **Dongle 侧 UNVERIFIED**：未找到任何 dongle 固件；线索是 `Keychron/zmk` 有 `rtl8762g` 分支、
+  Keychron org 有 `hal_realtek` ⇒ **其接收器很可能是 Realtek 方案，不是 Nordic**（未证实）。
+  ⇒ 即便走 Keychron 路线，**我们的 Dongle 仍要自己写**。
+
+#### 其他 ZMK + ESB 尝试（同报告 §4a/§4b + 2026-09-18 二轮深挖）
+
+##### ⭐ `badjeff/zmk-feature-split-esb` —— 用户记忆中的那个「专门做 Nordic 的 ZMK 分支」
+
+**这是目前最完整的开源 ZMK + Nordic ESB 实现**，形态是 **west module**（不必 fork ZMK 本体）：
+
+- 原理：用 **NCS 的 ESB 实现** 替换 ZMK 分体传输（`CONFIG_ZMK_SPLIT_ESB=y`），
+  并用 **MPSL（多协议服务层）** 做射频时间片仲裁 —— **BLE 与 ESB 真正共存于一颗 nRF52840**
+  （其工作基于 `ncs-esb-ble-mpsl-demo`）；
+- 依赖：NCS 的 ESB + MPSL（Nordic 组件，限 Nordic 芯片 —— 我们两端都是 Nordic，满足），
+  ⚠️ 但需要**作者 fork 的 NCS**（`sdk-nrf v3.1-branch+zmk-fixes`）才能过 CMake 校验；
+- 两种拓扑（README 数据，未实测）：
+  | 拓扑 | 延迟 | 功耗 |
+  | --- | --- | --- |
+  | **纯 ESB Dongle**（dongle 只走 USB，键盘半↔dongle 走 ESB） | **最低 1 ms** | TX 长期略低于 BLE（不保持连接） |
+  | **BLE + ESB 并存**（central 用 BLE 连主机，半用 ESB 连 central） | 7.5 + 1 ms | central **7.5 mA @4.0 V**（纯 BLE 仅 0.65 mA）；且连上主机后**没有足够射频资源再做广播**，central 只能配一台 BLE 主机 |
+- 🔴 **对本项目的根本限制**：它是 **split transport** —— 替换的是分体键盘「半 ↔ central」的链路。
+  **我们的 95 键是单体键盘，没有「半」**。要用它，就得把键盘建成 ZMK **split peripheral**、
+  把 Dongle 建成 split central —— 那正是 ADR-0001 否掉的**分体 Dongle 模式**
+  （键盘离开 Dongle 变砖、键盘端 USB HID 编译不进去、角色编译期定死；
+  第三方 `aroum/zmk-enki42-dongle` 的对比表也明说：该模式下插 USB 到键盘半**只能是充电**）；
+  且 peripheral 端要 `CONFIG_ZMK_BLE=n` ⇒ 键盘自己也做不了蓝牙直连。
+- 许可：模块本体许可**待核实**（badjeff 的模块多为 MIT，本次搜索页未显示 LICENSE）；
+  其依赖的 NCS ESB/MPSL 为 Nordic-5-Clause（限 Nordic 芯片）。
+
+> 📌 附带收获：`aroum/zmk-enki42-dongle` 的 README 有一张「三种 Dongle 路线」对比表
+> （原生 BLE / badjeff ESB / Keychron 2.4G），并证实 **Keychron 的 ESB 是预编译二进制
+> `lib_nrf_esb_24G.a`**（joric 的 nrfmicro wiki 亦如此记载），
+> 且其 dongle 固件与接收器原理图闭源 ⇒ **Keychron 路线无法移植到 DIY 硬件** ——
+> 这把上一轮「Keychron ESB 栈许可未核实」的疑问**收口了：是闭源 blob，不可复用**。
+
+| 项目 | 形态 | 成熟度（⭐ 2026-09-18 晚经 GitHub API 实测星数） |
+| --- | --- | --- |
+| **`badjeff/zmk-feature-split-esb`** | **west module**：ESB 替换分体链路（MPSL 与 BLE 共存） | **55★ / 18 fork**（本类最高星）；无顶层 LICENSE，per-file SPDX = ZMK 部分 MIT + NCS 部分 Nordic-5-Clause（见 `kmobs` fork 说明）；仅适用**分体**键盘 |
+| **`efogdev/zmk-esb-endpoint`** ⭐⭐ | **ESB 作为输出端点（endpoint），不是 split —— 单体键盘可用** | 5★、活跃（2026-09-13 推送）、**MIT**（vendored Nordic ESB 为 Nordic-5-Clause）；⚠️ **只按 ZMK v0.3.0 测过**（与本项目钉的版本一致！）。**详见 ADR-0011 附录 E** |
+| `GammaKinematics/zmk-feature-esb_transport` | ZMK(STM32 主控) → UART → **nRF52805 协处理器跑 ESB** → nRF52840 dongle | 0★，MIT，TODO 密集 |
+| `Keychron/zmk`（`keychron_bpro`） | **单体**键盘 + 第三条 ESB 输出（运行时切档） | 商用级，但 ESB 是**闭源 blob `lib_nrf_esb_24G.a`**、dongle 闭源 ⇒ 不可移植 |
+| `voltaire-toledo/submod-zmk` | Keychron B1 Pro 的重打包 fork（MIT） | 0★，2.4G 是否真实 UNVERIFIED |
+| 生态外围 | `damex/zmk-feature-split-esb`（8★，MIT，活跃）· `greengrocer98/zmk_esb_dongle` 与 `esb-transport-library`（ESB dongle 实现）· `pekorali/zmk-cyn-sofle`（Sofle + ESB dongle）· `Rapter2310/roard-split-ergo`（3× nice!nano + ESB） | 「ZMK + ESB」已形成小生态，不是孤例 |
+
+> ⚠️ **本节结论已第三次修正（2026-09-18 晚）**：`efogdev/zmk-esb-endpoint` 推翻了
+> 「ZMK + ESB 没有单体键盘可用方案」——**单体、输出端点形态、MIT、且按本项目钉住的 v0.3.0 测试**，
+> 四个条件全中。剩余风险（nRF52840 移植未验证、单维护者、无延迟/功耗数据、dongle 要自己写）
+> 与新旧两条路线的完整对比见 **ADR-0011 附录 E**。
+> **第一版选型的最终判断移交用户**：方案 A = ESP32-S3 BLE HID 主机（现选）；
+> 方案 B = nRF52 ESB（键盘 `zmk-esb-endpoint` 模块 + nRF52840 dongle）。
+
+#### 这对结论的影响（已按此更新）
+
+1. **「ZMK 做不了 ESB」这个说法不成立** —— Keychron 用
+   「Zephyr 开源控制器 + RADIO 分时复用 + 扩展 outputs 行为」做到了商用级。
+   ⇒ v2 选项从「零先例、自己趟」升级为「**有商用先例与实现路线图**」。
+2. **但第一版的结论不变**，因为代价结构没变，反而被 Keychron 的做法量化了：
+   要做的事 = **fork ZMK + 打 Zephyr 补丁（改控制器中断）+ 写 `app/src/24G/` 传输 +
+   自设计配对/跳频/省电 + 自己写 Dongle 端** —— 这是厂商级工程，
+   且我们的教程前提（用户用**原版 ZMK** 经 GitHub Actions 构建、钉 v0.3.0）会被完全打破。
+3. **许可仍有一道未核实的坎**：Keychron 的 ESB 栈源码（`app/src/24G/`）与其 patch
+   均未声明许可 ⇒ 思路可参考、**代码不可抄**；我们自己实现时要弄清
+   「Zephyr 开源控制器 + nrfx（Apache-2.0）+ 自写 ESB」能否做到全链 MIT/Apache ——
+   若能，v2 的许可障碍就真正消失。
+4. **触发条件不变**：v1 实测延迟不达标（ADR-0001 要求先建测量装置），
+   且接受「键盘端从此维护一条自定义无线链路」。
+
+#### 收益量化与决策
+
+- ESB 能把空口延迟从 BLE 的 **7.5 ms** 压到 **~1 ms**。
+  但按本 ADR 的硬规则：**所有延迟数字都是推算，从未实测**（见上节）——
+  v1 先用 BLE Dongle 拿到真实测量，才知道 7.5 ms 是不是真问题。
+  对打字而言 7.5 ms 与 1 ms 的差别大概率不可感知（商用无线键盘普遍 7.5–15 ms）。
+- **决策：第一版维持 BLE HID 主机 Dongle；原生 2.4G（ESB）作为 v2 立项候补**，
+  触发条件 = v1 实测延迟不达标 + 愿意承担「自维护一条无线链路」的长期成本。
+- **与 Dongle 芯片选择的关系**：这条复核**不改变** ESP32-S3 的选择 ——
+  「dongle 用不用 nRF52840」与「能不能上 ESB」是两件事：
+  nRF52840 Dongle 的价值在 B 方案（BLE HID 主机 + HOGP，见 ADR-0011 附录 D），
+  ESB 则**始终需要键盘端的 ZMK 模块**，与 Dongle 用哪颗芯片无关。
 
 #### 💡 顺带一个重要发现：Dongle 的核心卖点之一可以免费拿到
 

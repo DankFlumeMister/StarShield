@@ -17,10 +17,12 @@ include:
     shield: starshield
     artifact-name: starshield-body
 
-  # ── USB Dongle（BLE central）────────────────────────────
-  # 🔴 暂未启用：Dongle 需要 Seeed XIAO nRF52840 的 central 端 ZMK 配置
-  #    （BLE central + HID 转发），尚未设计。启用前请先补齐该 shield 配置。
-  #    Seeed XIAO nRF52840 在 ZMK 中的 board id 也需先行核实。
+  # ── USB Dongle（BLE HID 主机 → USB HID）─────────────────
+  # 🔴 暂未启用：Dongle 固件**不走 ZMK**，而是 ESP32-S3 + ESP-IDF 官方示例拼装
+  #    （`esp_hid_host` + `tusb_hid`，均 Apache-2.0，见 docs/adr/0011）。
+  #    ⚠️ 本段旧注释写的是 Seeed XIAO nRF52840 + ZMK central —— 那是 ADR-0011 之前的
+  #    旧方案（ZMK 分体 central 会让键盘离开 Dongle 变砖且失去蓝牙/有线两档），已废弃。
+  #    Dongle 构建将来单独加 workflow，不进本矩阵。
   # - board: seeeduino_xiao_ble
   #   shield: starshield_dongle
   #   artifact-name: starshield-dongle
