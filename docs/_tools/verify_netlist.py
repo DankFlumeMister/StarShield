@@ -128,7 +128,12 @@ def main():
     for n, nodes in nets.items():
         all_nets[n] |= nodes
 
-    sw = sorted([r for r in all_refs if r.startswith("SW")], key=lambda s: int(s[2:]))
+    # ⚠️ 只统计矩阵开关 SW1..SW95 —— 三档模式开关的位号是 **SW96**
+    #    （2026-09-18 B4 改名：原 SW1 与矩阵第一个开关重名，见 control_design.py）。
+    #    和二极管 D1..D95（充电 LED 是 D96）同样的口径，别把它算进矩阵断言。
+    sw = sorted([r for r in all_refs
+                 if re.fullmatch(r"SW(\d+)", r) and 1 <= int(r[2:]) <= 95],
+                key=lambda s: int(s[2:]))
     # ⚠️ 只统计矩阵二极管 D1..D95 —— 根图整体网表还含电源子图（充电 LED 的位号
     #    是 D96，刻意顺延避开矩阵），别把它算进矩阵断言。
     dd = sorted([r for r in all_refs if re.fullmatch(r"D(\d+)", r) and 1 <= int(r[1:]) <= 95],

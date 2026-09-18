@@ -235,13 +235,14 @@ def main():
     check("U4 的 QC..QH 与 QH' 全部 NC（bit18..23 空闲）",
           all((("U4", p) in nc) for p in ("2", "3", "4", "5", "6", "7", "9")))
     # 三档开关
-    check("SW1 公共端(3) 接 GND（ACTIVE_LOW 读取）", ("SW1", "3") in g.get("GND", set()))
-    check("档 0（有线）：SW1.1 与 J3A.5(D2/P0.17) 同网 MODE0",
-          g.get("MODE0") == {("SW1", "1"), ("J3A", "5")})
-    check("档 1（蓝牙）：SW1.2 与 J3B.10(D14/P1.11) 同网 MODE1",
-          g.get("MODE1") == {("SW1", "2"), ("J3B", "10")})
-    check("档 2（2.4G）：SW1.4 与 J3B.8(D18/P1.15) 同网 MODE2",
-          g.get("MODE2") == {("SW1", "4"), ("J3B", "8")})
+    # ⚠️ 位号 SW96（不是 SW1）：原 SW1 与矩阵第一个开关重名，2026-09-18（B4）改名
+    check("SW96 公共端(3) 接 GND（ACTIVE_LOW 读取）", ("SW96", "3") in g.get("GND", set()))
+    check("档 0（有线）：SW96.1 与 J3A.5(D2/P0.17) 同网 MODE0",
+          g.get("MODE0") == {("SW96", "1"), ("J3A", "5")})
+    check("档 1（蓝牙）：SW96.2 与 J3B.10(D14/P1.11) 同网 MODE1",
+          g.get("MODE1") == {("SW96", "2"), ("J3B", "10")})
+    check("档 2（2.4G）：SW96.4 与 J3B.8(D18/P1.15) 同网 MODE2",
+          g.get("MODE2") == {("SW96", "4"), ("J3B", "8")})
     # 供电
     check("nice!nano RAW(J3B.1) 接电源子图系统轨 OUT（不是 VBUS）",
           ("J3B", "1") in g.get("OUT", set()) and ("J3B", "1") not in g.get("VBUS", set()))

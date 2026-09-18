@@ -91,7 +91,10 @@ COMPONENTS = [
     # 符号掷点与封装 pad 的对应）。
     # ⚠️ GPIO_ACTIVE_LOW 读取、公共端接 GND：未选中档由 ZMK 驱动内部上拉到 3.3V
     #    （ADR-0009：DT 里不写 pull，驱动按 ACTIVE_LOW 自行推导 PULL_UP）。
-    dict(ref="SW1", lib="Switch:SW_SP3T", value="PCM13 (SP3T)",
+    # ⚠️ 位号 = SW96，不是 SW1 —— 2026-09-18（B4）发现：原 SW1 与矩阵第一个开关
+    #    SW1 重名，根图整体网表里两个元件的引脚会并到同一个位号下。
+    #    顺延矩阵（SW1..SW95）+ 充电 LED（D96）的既有编号习惯 ⇒ 取 SW96。
+    dict(ref="SW96", lib="Switch:SW_SP3T", value="PCM13 (SP3T)",
          fp="Button_Switch_SMD:SW_SP3T_PCM13", at=(50.8, 63.5), rot=0,
          props={"MPN": "PCM13SMTR", "LCSC": "❓待补（BOM 阶段）",
                 "Note": "pin3=公共端接GND；pin1/2/4 = 档0有线/档1蓝牙/档2 2.4G"}),
@@ -189,11 +192,11 @@ CONN = {
     "U4.11": "595_SCK", "U4.12": "595_RCLK", "U4.10": "VCC", "U4.13": "GND",
     "U4.16": "VCC", "U4.8": "GND",
 
-    # --- SW1 三档开关（pin3 = 公共端）----------------------------------------
-    "SW1.3": "GND",         # 公共端接 GND（ADR-0009：触点被选中时拉低，ACTIVE_LOW 读 0）
-    "SW1.1": "MODE0",       # 档 0：有线（&out OUT_USB）
-    "SW1.2": "MODE1",       # 档 1：蓝牙（&out OUT_BLE + BT_SEL 0）
-    "SW1.4": "MODE2",       # 档 2：2.4G（&out OUT_BLE + BT_SEL 1 → Dongle）
+    # --- SW96 三档开关（pin3 = 公共端）----------------------------------------
+    "SW96.3": "GND",         # 公共端接 GND（ADR-0009：触点被选中时拉低，ACTIVE_LOW 读 0）
+    "SW96.1": "MODE0",       # 档 0：有线（&out OUT_USB）
+    "SW96.2": "MODE1",       # 档 1：蓝牙（&out OUT_BLE + BT_SEL 0）
+    "SW96.4": "MODE2",       # 档 2：2.4G（&out OUT_BLE + BT_SEL 1 → Dongle）
 
     # --- 去耦 ----------------------------------------------------------------
     "C4.1": "VCC", "C4.2": "GND",
