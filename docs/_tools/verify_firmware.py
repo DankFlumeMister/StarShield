@@ -13,6 +13,7 @@
   6. overlay 里引用的 phandle（&spi1/&spi3/&pro_micro/&shifter）都有定义
   7. 引脚不与保留脚冲突（P0.15 蓝灯 等）
   8. 90 颗 LED / 95 键等关键数字与文档一致
+  9. C1 三档模式开关（toggle-mode + sideband + 3 GPIO + spi1 MISO 冲突修复）
 """
 import os
 import re
@@ -212,7 +213,9 @@ refs = set(re.findall(r"&([a-z_][a-z0-9_]*)", combined))
 labels = set(re.findall(r"^\s*([a-z_][a-z0-9_]*)\s*:", combined, re.M))
 overrides = set(re.findall(r"^\s*&([a-z_][a-z0-9_]*)\s*\{", combined, re.M))
 BOARD = {"spi1", "spi3", "pinctrl", "pro_micro", "gpio0", "gpio1", "adc",
-         "gpiote", "usbd", "flash0", "reg0", "reg1", "key_physical_attrs"}
+         "gpiote", "usbd", "flash0", "reg0", "reg1", "key_physical_attrs",
+         # ZMK 上游 behaviors.dtsi 定义的内置行为（本 shield 的 C1 档位绑定会引用它们）
+         "bt", "out"}
 check("physical_layout0 已定义", "physical_layout0" in labels)
 check("default_transform 已定义", "default_transform" in labels)
 for r in sorted(refs):
@@ -228,8 +231,9 @@ check("ngpios = 24（3 颗 595 级联；2026-09-18 修订，原 2 颗驱动不�
 check("diode-direction = col2row", 'diode-direction = "col2row"' in ov)
 check("列数 18", len(re.findall(r"<&shifter\s+\d+", ov)) == 18,
       f"实得 {len(re.findall(r'<&shifter', ov))}")
-check("行数 6", len(re.findall(r"<&pro_micro\s+\d+\s+\(", ov)) == 6,
-      f"实得 {len(re.findall(r'<&pro_micro', ov)) - 1}（已扣除 cs-gpios）")
+m_rows = re.search(r"row-gpios([\s\S]*?);", ov)
+check("行数 6", m_rows is not None and len(re.findall(r"<&pro_micro\s+\d+\s+\(", m_rows.group(0))) == 6,
+      f"实得 {len(re.findall(r'<&pro_micro', m_rows.group(0))) if m_rows else '?'}")
 check("EXT_POWER 节点名正确", "EXT_POWER {" in ov, "ZMK 要求此名以保留用户设置")
 check("未占用 P0.15（蓝灯）", "0 15" not in ov)
 check("未占用 P0.13（VCC 门控）", "0 13" not in ov)
@@ -241,6 +245,64 @@ print("=" * 70)
 spi595 = "&spi1" in ov
 spi_rgb = "&spi3" in ov
 check("595 在 &spi1 且 RGB 在 &spi3", spi595 and spi_rgb, f"spi1={spi595} spi3={spi_rgb}")
+
+print()
+print("=" * 70)
+print("9. C1 三档模式开关（ADR-0009 + B2 的 GPIO 定案 D2/D14/D18）")
+print("=" * 70)
+# ---- kscan toggle 节点 ----
+m_tog = re.search(r"kscan_sp3t_toggle:\s*kscan_sp3t_toggle\s*\{([\s\S]*?)\n    \};", ov)
+check("存在 kscan_sp3t_toggle 节点", m_tog is not None)
+if m_tog:
+    body = m_tog.group(1)
+    check('compatible = "zmk,kscan-gpio-direct"',
+          'compatible = "zmk,kscan-gpio-direct";' in body)
+    check("toggle-mode 已打开", "toggle-mode;" in body)
+    check("wakeup-source（拨动开关可唤醒深睡，Altar I 同款）",
+          "wakeup-source" in body)
+    gpios = re.findall(r"<&pro_micro\s+(\d+)\s+([^>]+)>", body)
+    check("恰好 3 个输入脚，且是 D2 / D14 / D18（B2 定案 MODE0/1/2）",
+          [g[0] for g in gpios] == ["2", "14", "18"], str([g[0] for g in gpios]))
+    check("三档全部 GPIO_ACTIVE_LOW（公共端接 GND，原理图 SW96）",
+          all("GPIO_ACTIVE_LOW" in g[1] for g in gpios))
+    check("DT 里【不写】pull 标志（驱动按极性自行推导，ADR-0009 核对过驱动源码）",
+          all("PULL_" not in g[1] for g in gpios))
+
+# ---- sideband 映射 ----
+m_sb = re.search(r"endpoint_sideband_behaviors\s*\{([\s\S]*?)\n    \};", ov)
+check("存在 endpoint_sideband_behaviors 节点（sideband 写法，与 keymap 解耦）", m_sb is not None)
+if m_sb:
+    sb = m_sb.group(1)
+    check('compatible = "zmk,kscan-sideband-behaviors"',
+          'compatible = "zmk,kscan-sideband-behaviors";' in sb)
+    check("auto-enable", "auto-enable;" in sb)
+    check("kscan 指向 kscan_sp3t_toggle", "kscan = <&kscan_sp3t_toggle>;" in sb)
+    cols = re.findall(r"column = <(\d)>;\s*\n\s*bindings = <([^>]+)>;", sb)
+    check("三档列序 = 0/1/2", [c[0] for c in cols] == ["0", "1", "2"], str([c[0] for c in cols]))
+    check("档 0（有线）= &out OUT_USB", cols and cols[0][1] == "&out OUT_USB",
+          str(cols[0][1] if cols else "?"))
+    check("档 1（蓝牙）经宏 → OUT_BLE + 配对位 0", cols and cols[1][1] == "&mode_ble_host",
+          str(cols[1][1] if cols else "?"))
+    check("档 2（2.4G）经宏 → OUT_BLE + 配对位 1", cols and cols[2][1] == "&mode_dongle",
+          str(cols[2][1] if cols else "?"))
+
+# ---- 档位宏 ----
+m_ble = re.search(r"mode_ble_host:\s*mode_ble_host\s*\{([\s\S]*?)\n        \};", ov)
+m_dgl = re.search(r"mode_dongle:\s*mode_dongle\s*\{([\s\S]*?)\n        \};", ov)
+check("宏 mode_ble_host = OUT_BLE + BT_SEL 0（直连主机）",
+      m_ble is not None and "&out OUT_BLE &bt BT_SEL 0" in m_ble.group(1))
+check("宏 mode_dongle = OUT_BLE + BT_SEL 1（连 Dongle，ADR-0001）",
+      m_dgl is not None and "&out OUT_BLE &bt BT_SEL 1" in m_dgl.group(1))
+
+# ---- spi1 MISO 冲突（🔴 本次 C1 实测发现并修复）----
+p_ov = os.path.join(SHIELD, "starshield.overlay")
+m_pc = re.search(r"&pinctrl\s*\{([\s\S]*?)\n\};", ov)
+check("覆盖了板级 spi1 pinctrl（nice!nano 默认把 MISO 放在 P1.11 = D14，与 MODE1 冲突）",
+      m_pc is not None and "spi1_default" in (m_pc.group(1) if m_pc else ""))
+if m_pc:
+    pc = m_pc.group(1)
+    check("spi1 只保留 SCK(P1.13) + MOSI(P0.10)（595 是只写器件，不需要 MISO）",
+          "SPIM_SCK, 1, 13" in pc and "SPIM_MOSI, 0, 10" in pc and "SPIM_MISO" not in pc)
 
 print()
 print("=" * 70)

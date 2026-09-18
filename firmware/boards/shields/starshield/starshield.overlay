@@ -14,16 +14,21 @@
  *     （为保留按键唤醒中断）→ col2row 下【列走 595、行直连 MCU】
  *   - 官方要求：595 的 ngpios 只能取 8/16/24/32 → 18 列需 **3 颗**级联（24 位链、用前 18 位）
  *   - 595 与 WS2812 必须用【不同】SPI 外设（两者都是 SPI 从设备）
- *       595   → &spi1（MOSI P0.10 / SCK P1.13 / MISO P1.11）
+ *       595   → &spi1（MOSI P0.10 / SCK P1.13；**MISO 已在本 shield 覆盖掉** ——
+ *               板级默认把 MISO 放在 P1.11 = D14，与 C1 的三档开关 MODE1 冲突，见下方 &pinctrl）
  *       WS2812 → &spi3（MOSI P0.06）
  *   - P0.13 是 nice!nano 的 VCC 门控脚（置高切断 VCC），官方就是这么省 LED 静态功耗的
+ *   - 三档模式开关（C1）：D2(P0.17) / D14(P1.11) / D18(P1.15) = MODE0/MODE1/MODE2
  *
  * ⚠️ 本文件为设计稿：引脚分配已在 DTS 层面自洽，但【投板前必须用实物核对】
  *    （nice!nano 的排针 pitch/每边脚数未能从官方数字确认，仅有 Pro Micro 标准旁证）。
  */
 
+#include <behaviors.dtsi>
 #include <dt-bindings/led/led.h>
 #include <dt-bindings/zmk/matrix_transform.h>
+#include <dt-bindings/zmk/bt.h>
+#include <dt-bindings/zmk/outputs.h>
 
 /* 键位映射表（自动生成，内容为 &default_transform { columns/rows/map }） */
 #include "starshield_transform.dtsi"
@@ -102,6 +107,96 @@
         compatible = "zmk,ext-power-generic";
         control-gpios = <&pro_micro 10 GPIO_ACTIVE_HIGH>;   /* P0.09 → 反相级 → LED 轨 */
         init-delay-ms = <50>;
+    };
+
+    /*
+     * 三档模式开关（C1，ADR-0009）—— SP3T C&K PCM13（原理图位号 SW96，B4 由 SW1 改名）。
+     * 原理图连接（control.kicad_sch）：公共端(3) → GND；档 0/1/4 → MODE0/MODE1/MODE2。
+     *   档 0（有线）  = MODE0 = D2  (P0.17)
+     *   档 1（蓝牙）  = MODE1 = D14 (P1.11)
+     *   档 2（2.4G）  = MODE2 = D18 (P1.15)
+     *
+     * ⚠️ DT 里【不要】写 pull 标志：驱动按 GPIO_ACTIVE_LOW 自行推导 PULL_UP
+     *    （kscan_gpio_direct.c 的 kscan_gpio_get_extra_flags()；ADR-0009 已核对源码；
+     *      出货产品 Altar I 写了 PULL_UP 属「冗余但无害」，本项目按官方文档不写）。
+     * ⚠️ wakeup-source：拨动开关本身即可把 MCU 从深度睡眠唤醒（Altar I 同款做法）。
+     *
+     * ⚠️ 若 C7（ESB 端点验证）通过，「2.4G」档改由 zmk-esb-endpoint 的最后 BLE profile
+     *    承载 —— 档位读取方式不变，只需换 col2 的绑定。
+     */
+    kscan_sp3t_toggle: kscan_sp3t_toggle {
+        compatible = "zmk,kscan-gpio-direct";
+        toggle-mode;
+        wakeup-source;
+
+        input-gpios
+            = <&pro_micro 2  GPIO_ACTIVE_LOW>   /* 档 0：有线  = MODE0 = D2  (P0.17) */
+            , <&pro_micro 14 GPIO_ACTIVE_LOW>   /* 档 1：蓝牙  = MODE1 = D14 (P1.11) */
+            , <&pro_micro 18 GPIO_ACTIVE_LOW>   /* 档 2：2.4G  = MODE2 = D18 (P1.15) */
+            ;
+    };
+
+    /*
+     * 档位 → 行为映射（sideband 写法，与 keymap 解耦：用户改键 / Studio 改键都不会破坏它）。
+     * 照抄上游 zmk_uno.overlay 的参考实现（ADR-0009 已逐行核对 v0.3.0）。
+     */
+    macros {
+        mode_ble_host: mode_ble_host {
+            /* 蓝牙档：切到 BLE 输出 + 配对位 0（直连主机） */
+            bindings = <&out OUT_BLE &bt BT_SEL 0>;
+        };
+
+        mode_dongle: mode_dongle {
+            /* 2.4G 档：切到 BLE 输出 + 配对位 1（Dongle 是 BLE HID 主机，ADR-0001） */
+            bindings = <&out OUT_BLE &bt BT_SEL 1>;
+        };
+    };
+
+    endpoint_sideband_behaviors {
+        compatible = "zmk,kscan-sideband-behaviors";
+        auto-enable;
+        wakeup-source;
+        kscan = <&kscan_sp3t_toggle>;
+
+        mode_col0: mode_col0 {
+            column = <0>;
+            bindings = <&out OUT_USB>;          /* 有线 */
+        };
+
+        mode_col1: mode_col1 {
+            column = <1>;
+            bindings = <&mode_ble_host>;        /* 蓝牙 */
+        };
+
+        mode_col2: mode_col2 {
+            column = <2>;
+            bindings = <&mode_dongle>;          /* 2.4G（Dongle） */
+        };
+    };
+};
+
+/*
+ * 🔴 覆盖板级 spi1 的 pinctrl：**去掉 MISO**。
+ *
+ * nice!nano 板级 `spi1_default` 含 `SPIM_MISO = P1.11`（= Pro Micro D14），
+ * 而 C1 把 **D14 定案为三档开关的 MODE1**（B2，见 §9）⇒ 直接冲突。
+ * 74HC595 是**只写**器件（SER/SRCLK/RCLK 三根线），MISO 根本不接 ⇒ 显式去掉，
+ * 既释放 P1.11，又省一根引脚配置。此覆盖写在本 shield 里，换板时需同步检查。
+ */
+&pinctrl {
+    spi1_default: spi1_default {
+        group1 {
+            psels = <NRF_PSEL(SPIM_SCK, 1, 13)>,
+                <NRF_PSEL(SPIM_MOSI, 0, 10)>;
+        };
+    };
+
+    spi1_sleep: spi1_sleep {
+        group1 {
+            psels = <NRF_PSEL(SPIM_SCK, 1, 13)>,
+                <NRF_PSEL(SPIM_MOSI, 0, 10)>;
+            low-power-enable;
+        };
     };
 };
 
