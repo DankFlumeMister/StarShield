@@ -50,15 +50,24 @@ PAPER = "A3"
 #      插座」，Mill-Max 插座就是两条 1x12 排母；
 #   3) 引脚号 1..12 与 Pro Micro 标号**直接一致**（J3A.n = Pro Micro 标号 n，
 #      J3B.n = Pro Micro 标号 12+n），杜绝 2x12 符号「引脚号 ≠ 排针标号」的心智负担。
+#
+# 封装（B3，2026-09-18）：`Connector_PinSocket_2.54mm:PinSocket_1x12_P2.54mm_Vertical`
+#   官方库**没有** Connector_Mill-Max（155 个 .pretty 全查过）⇒ 用通用 1x12 排母封装。
+#   孔径匹配：排母封装焊盘孔径 1.0 mm；Mill-Max 315-43-1xx 系列推荐 PCB 孔径约 0.94 mm
+#   ⇒ 可焊，但**具体料号与孔径仍须投板前用实物核对（并入 B6）**。
 COMPONENTS = [
     # --- J3A：nice!nano v2 左列（Pro Micro 标号 1..12，自上而下）-------------
     dict(ref="J3A", lib="Connector_Generic:Conn_01x12", value="nice!nano v2 左列 (PM 1-12)",
-         fp="❓待定（Mill-Max 插座，B3/B4 定）", at=(50.8, 139.7), rot=0,
-         props={"Note": "J3A.n = Pro Micro 标号 n；映射依据 ZMK arduino_pro_micro_pins.dtsi"}),
+         fp="Connector_PinSocket_2.54mm:PinSocket_1x12_P2.54mm_Vertical",
+         at=(50.8, 139.7), rot=0,
+         props={"MPN": "Mill-Max 315-43-112-41-001000 ❓待核",
+                "Note": "J3A.n = Pro Micro 标号 n；映射依据 ZMK arduino_pro_micro_pins.dtsi"}),
     # --- J3B：nice!nano v2 右列（Pro Micro 标号 13..24，自上而下）-------------
     dict(ref="J3B", lib="Connector_Generic:Conn_01x12", value="nice!nano v2 右列 (PM 13-24)",
-         fp="❓待定（Mill-Max 插座，B3/B4 定）", at=(76.2, 139.7), rot=0,
-         props={"Note": "J3B.n = Pro Micro 标号 12+n；RAW(PM13) 接 OUT，VCC(PM16) 是 3.3V 轨"}),
+         fp="Connector_PinSocket_2.54mm:PinSocket_1x12_P2.54mm_Vertical",
+         at=(76.2, 139.7), rot=0,
+         props={"MPN": "Mill-Max 315-43-112-41-001000 ❓待核",
+                "Note": "J3B.n = Pro Micro 标号 12+n；RAW(PM13) 接 OUT，VCC(PM16) 是 3.3V 轨"}),
 
     # --- 列驱动：3 颗 74HC595 级联 -------------------------------------------
     # ⚠️ 2026-09-18 修订（ADR-0008）：**3 颗**，不是 2 颗。
