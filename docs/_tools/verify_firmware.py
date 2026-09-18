@@ -14,6 +14,7 @@
   7. 引脚不与保留脚冲突（P0.15 蓝灯 等）
   8. 90 颗 LED / 95 键等关键数字与文档一致
   9. C1 三档模式开关（toggle-mode + sideband + 3 GPIO + spi1 MISO 冲突修复）
+ 10. C3 软关机（CONFIG_ZMK_PM_SOFT_OFF + keymap 的 &soft_off 位置）与 USB boot
 """
 import os
 import re
@@ -303,6 +304,28 @@ if m_pc:
     pc = m_pc.group(1)
     check("spi1 只保留 SCK(P1.13) + MOSI(P0.10)（595 是只写器件，不需要 MISO）",
           "SPIM_SCK, 1, 13" in pc and "SPIM_MOSI, 0, 10" in pc and "SPIM_MISO" not in pc)
+
+print()
+print("=" * 70)
+print("10. C3 软关机 + USB boot（配合 ADR-0010 不设物理断电开关）")
+print("=" * 70)
+conf = read(os.path.join(SHIELD, "starshield.conf"))
+check("CONFIG_ZMK_PM_SOFT_OFF=y 已开", "CONFIG_ZMK_PM_SOFT_OFF=y" in conf)
+check("CONFIG_ZMK_USB_BOOT=y 已开", "CONFIG_ZMK_USB_BOOT=y" in conf)
+
+km = read(os.path.join(SHIELD, "starshield.keymap"))
+check("keymap 引用 &soft_off 恰好一次（避免误触/重复绑定）", km.count("&soft_off") == 1,
+      f"出现 {km.count('&soft_off')} 次")
+m_fn = re.search(r"fn_layer\s*\{[\s\S]*?bindings = <([\s\S]*?)>;", km)
+if m_fn:
+    binds = re.findall(r"&[A-Za-z_][A-Za-z0-9_]*(?:\s+[A-Za-z_0-9]+)*", m_fn.group(1))
+    binds = [b.strip() for b in binds]
+    idx = [i for i, b in enumerate(binds) if b.startswith("&soft_off")]
+    check("&soft_off 在 FN 层位置 16（小键盘 `/`；换位置要同步本断言与 .conf 注释）",
+          idx == [16], f"实际位置 {idx}")
+check("base 层不含 &soft_off（软关机不应在日常层裸绑）",
+      "default_layer" in km and "&soft_off" not in
+      re.search(r"default_layer\s*\{[\s\S]*?bindings = <([\s\S]*?)>;", km).group(1))
 
 print()
 print("=" * 70)

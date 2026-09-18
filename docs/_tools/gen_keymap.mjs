@@ -85,7 +85,10 @@ const FN = {
   15: '&kp DEL',
 
   // 小键盘区 → 导航键簇（经典 numpad 导航布局）
-  16: '&kp K_CMENU', 17: '&kp KP_NUM', 18: '&kp K_CMENU', 19: '&kp KP_NUM',
+  // ⚠️ 位置 16（小键盘 `/`）改绑 `&soft_off`（C3）：本项目不设物理断电开关（ADR-0010），
+  //    长时间存放靠软关机。需要 `CONFIG_ZMK_PM_SOFT_OFF=y`；**唤醒只能靠复位**。
+  //    换位置只改这一行即可（当前是 FN + 小键盘 `/`，需刻意按，不易误触）。
+  16: '&soft_off', 17: '&kp KP_NUM', 18: '&kp K_CMENU', 19: '&kp KP_NUM',
   // 主键区数字行 → F1..F12
   20: '&kp GRAVE', 21: '&kp F1', 22: '&kp F2', 23: '&kp F3', 24: '&kp F4', 25: '&kp F5',
   26: '&kp F6', 27: '&kp F7', 28: '&kp F8', 29: '&kp F9', 30: '&kp F10',
