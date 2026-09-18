@@ -73,7 +73,7 @@ python docs\_tools\verify_firmware.py  # 静态校验（本机可跑，替代实
 
 | 项 | 值 | 依据 |
 | --- | --- | --- |
-| `ngpios` | **24** | 绑定限定只能 8/16/24/32；18 列需 2 颗级联 |
+| `ngpios` | **24** | 绑定限定只能 8/16/24/32；18 列需 **3 颗**级联（⚠️ 2026-09-18 修订：原「2 颗」电气不成立 —— 2 颗仅 16 输出位，bit16/17 会被推出链尾丢失；原理图见 `control/control.kicad_sch`） |
 | `diode-direction` | **`col2row`** | 与 `docs/matrix-assignment.md` 的二极管方向一致 |
 | `EXT_POWER` 节点名 | **必须叫 `EXT_POWER`** | 官方文档：否则用户已保存的设置会丢失 |
 | `control-gpios` 极性 | **`GPIO_ACTIVE_HIGH`** | 经 NMOS 反相级后逻辑非反相（见 `power-architecture.md` §5.4） |

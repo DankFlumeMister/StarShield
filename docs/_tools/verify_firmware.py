@@ -224,7 +224,7 @@ print("=" * 70)
 print("7. 关键数字与引脚安全")
 print("=" * 70)
 check("chain-length = 95（LED 数）", "chain-length = <95>" in ov)
-check("ngpios = 24（2 颗 595 级联）", "ngpios = <24>" in ov)
+check("ngpios = 24（3 颗 595 级联；2026-09-18 修订，原 2 颗驱动不了 18 列）", "ngpios = <24>" in ov)
 check("diode-direction = col2row", 'diode-direction = "col2row"' in ov)
 check("列数 18", len(re.findall(r"<&shifter\s+\d+", ov)) == 18,
       f"实得 {len(re.findall(r'<&shifter', ov))}")
