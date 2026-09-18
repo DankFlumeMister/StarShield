@@ -38,20 +38,18 @@ TMP = os.path.join(PCB, "_tmp")
 ROOT_SHEET = os.path.join(PCB, "Starshield.kicad_sch")
 
 # ⚠️ DRC 豁免：kind -> 理由。带 `❓` 的表示尚未根因确认，投板前必须回看。
+#    2026-09-19 B4 收尾：unconnected_items（已清零）与 holes_co_located（重合
+#    过孔已删）两条豁免**已移除** —— 它们再次出现就应当场失败。
 DRC_ALLOW = {
-    "unconnected_items": "已布线（4 层，Freerouting）但**未完成**：剩 5 条未连通 —— "
-                         "COL0 1、D17-A 2、VBUS 1、另 1。投板前必须清零；"
-                         "详见 handoff §9 B4 的收尾清单。",
-    "holes_co_located": "COL0 在 (3.6867, 62.8397) 有两个重合过孔（手工补线时多加了一个），"
-                        "电气无害，属冗余；投板前删掉其一。",
     "courtyards_overlap": "per-key 布局必然：灯珠/二极管就在轴体自身的 courtyard 内（实测 96 项）",
     "lib_footprint_mismatch": "自画封装（MX 热插拔座 8 档）与库内版本差异，与 ERC 噪音同类",
     "lib_footprint_issues": "同上，95 个自画封装",
     "silk_overlap": "丝印重叠，投板前统一整理（与 ERC off-grid 噪音同类）",
     "silk_over_copper": "丝印压焊盘，投板前统一整理",
+    "silk_edge_clearance": "丝印贴板边（2026-09-19 补记：warning 级 ×3，此前漏登记）",
     "nonmirrored_text_on_back_layer": "自画封装 B.Cu 面的参考编号未镜像（95 项），投板前统一处理",
     "drill_out_of_range": "U1 散热焊盘自带 0.2 mm 过孔（官方 ThermalVias 变体）；投板前按厂家最小孔径确认",
-    "hole_clearance": "❓ 报告的第二坐标与第一坐标相差 331 mm，坐标明显异常；已人工核对 SW68 的 NPTH 位置正确 ⇒ 疑似 KiCad 10 DRC 报告 bug",
+    "hole_clearance": "❓ 报告的第二坐标与第一坐标相差 331 mm，坐标明显异常；已人工核对 SW68 的 NPTH 位置正确 ⇒ 疑似 KiCad 10 DRC 报告 bug（×3，B4 收尾前后均为 3 条，与本次补线无关）",
     "solder_mask_bridge": "❓ 同上，成对出现（SW68 NPTH ↔ D95），坐标同样异常",
     "npth_inside_courtyard": "❓ 同上",
 }
@@ -115,9 +113,13 @@ def _blocks(text, marker):
 
 
 def _rot(x, y, deg):
+    """KiCad 的封装旋转是**顺时针**（y 轴向下）：
+    x' = lx·cosθ + ly·sinθ ; y' = -lx·sinθ + ly·cosθ。
+    ⚠️ 旧版写成逆时针公式，rot=90/270 的焊盘世界坐标会镜像错 3.3 mm
+    （二极管/灯珠全是 ±90° 摆放 ⇒ 全部中招），2026-09-19 实测修正。"""
     r = math.radians(deg)
     c, s = math.cos(r), math.sin(r)
-    return x * c - y * s, x * s + y * c
+    return x * c + y * s, -x * s + y * c
 
 
 def parse_board(path):
@@ -140,7 +142,10 @@ def parse_board(path):
                 continue
             pa = re.search(r'\(at ([-\d.]+) ([-\d.]+)(?: ([-\d.]+))?\)', pb)
             ps = re.search(r'\(size ([-\d.]+) ([-\d.]+)\)', pb)
-            pn = re.search(r'\(net (\d+) "([^"]*)"\)', pb)
+            # ⚠️ KiCad 10 的 pad 网声明是 `(net "NAME")`（无数字 id）；
+            #    旧正则要求 `\d+` ⇒ 全部 pad 的网解析成 None，
+            #    检查 F「pad 网 == 原理图网表」**静默假通过**（2026-09-19 修正）。
+            pn = re.search(r'\(net (?:\d+ )?"([^"]*)"\)', pb)
             pd = re.search(r'\(drill', pb)
             if not (pa and ps):
                 continue
@@ -152,7 +157,7 @@ def parse_board(path):
                 w, h = h, w
             pads.append(dict(num=pm.group(1), typ=pm.group(2),
                              x=fx + x, y=fy + y, w=w, h=h,
-                             net=pn.group(2) if pn else None,
+                             net=pn.group(1) if pn else None,
                              drill=bool(pd)))
         comps[ref] = dict(fp=m_fp.group(1), at=(fx, fy, frot), pads=pads)
     return comps
