@@ -169,7 +169,7 @@ def main():
     check("CC1 / CC2 各自 5.1k 下拉且互不短接",
           got.get("CC1") == {("J1", "A5"), ("R1", "1")} and got.get("CC2") == {("J1", "B5"), ("R2", "1")})
     check("充电 LED 极性：OUT → R6 → LED 阳极，阴极接 ~CHG 开漏",
-          got.get("CHG_LED_A") == {("D1", "2"), ("R6", "2")} and got.get("nCHG") == {("D1", "1"), ("U1", "9")}
+          got.get("CHG_LED_A") == {("D96", "2"), ("R6", "2")} and got.get("nCHG") == {("D96", "1"), ("U1", "9")}
           and ("R6", "1") in got.get("OUT", set()))
     check("USB-C 四个 VBUS 焊盘并联接 IN、四个 GND 焊盘接地",
           {("J1", p) for p in ("A4", "A9", "B4", "B9")} <= got.get("VBUS", set())

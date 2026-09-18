@@ -144,7 +144,10 @@ COMPONENTS = [
     dict(ref="R6", lib="Device:R", value="1.5k",
          fp="Resistor_SMD:R_0603_1608Metric", at=(185.42, 106.68), rot=0,
          props={"Note": "充电 LED 限流（约 1.2 mA @4.2V）"}),
-    dict(ref="D1", lib="Device:LED", value="RED",
+    # 位号 D96：矩阵二极管占用了 D1..D95，充电 LED 顺延编 D96 ——
+    # ⚠️ 不能用 D1（与矩阵 D1 冲突，根图整体网表会合并成同一元件，2026-09-18 实测发现）；
+    #    也不建议 LED1（将来 RGB 子图的 95 颗 SK6812 会用 LED1..LED95）。
+    dict(ref="D96", lib="Device:LED", value="RED",
          fp="LED_SMD:LED_0603_1608Metric", at=(185.42, 121.92), rot=0,
          props={"Note": "充电中亮，充满灭（选红光：低压差下仍可见）"}),
 
@@ -242,7 +245,7 @@ CONN = {
 
     # --- 充电指示 ----------------------------------------------------------
     "R6.1": "OUT", "R6.2": "CHG_LED_A",
-    "D1.1": "nCHG", "D1.2": "CHG_LED_A",   # Device:LED  pin1=K  pin2=A
+    "D96.1": "nCHG", "D96.2": "CHG_LED_A",   # Device:LED  pin1=K  pin2=A
 
     # --- RGB 门控 ----------------------------------------------------------
     # 控制链：GPIO(HIGH) → R8 → Q2(G) 导通 → Q1(G) 被拉到 GND → Vgs=-V(OUT) → Q1 导通 → VLED 得电

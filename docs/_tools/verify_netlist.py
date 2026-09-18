@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """verify_netlist.py — 校验 StarShield 矩阵原理图的网表是否电气正确
 
-对每张矩阵子图调用 kicad-cli 导出网表，然后校验：
+对【根图】整体导出网表（递归含全部子图），然后校验：
   1. 元件数量（开关 + 二极管 = 键数）
   2. 每个开关的 pin1 接在某条 ROW 网络上
   3. 每个开关的 pin2 接在某个二极管的阳极上（同一网络内存在 D 的 pin2）
   4. 每个二极管的 K(pin1) 接在某条 COL 网络上
   5. 全部开关合计恰好 95 个，列网络节点合计 = 键数
   6. 无「同一矩阵格被两个键占用」的冲突（行,列 组合唯一）
+
+⚠️ 历史教训（2026-09-18 修复）：本脚本曾对**每张矩阵子图单独导出网表再按网名
+   合并**——那等于「替 KiCad 模拟了跨图连接」，掩盖了一个真实缺陷：
+   局部标签不跨 sheet 相连，三张矩阵子图的同名 COL 网在真实网表里带各自的
+   sheet 路径前缀（/矩阵行 R0-R1/COL0 等），根本不是一条网。
+   现改为从根图整体导出（KiCad 递归展开全部子图），校验的就是真实连通性。
+   全局网（COL0/ROW0/VBUS/...）在根图网表里不带路径前缀。
 """
 import collections
 import os
@@ -66,11 +73,6 @@ if not KICAD_CLI:
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PCB = os.path.normpath(os.path.join(HERE, "..", "..", "hardware", "pcb", "StarShield"))
-SHEETS = [
-    "matrix/matrix_r012.kicad_sch",
-    "matrix/matrix_r234.kicad_sch",
-    "matrix/matrix_r45.kicad_sch",
-]
 TMP = os.path.join(PCB, "_tmp")
 os.makedirs(TMP, exist_ok=True)
 
@@ -86,39 +88,50 @@ def cleanup():
 WS = r"\s+"
 
 
+ROOT_SHEET = "Starshield.kicad_sch"
+
+
 def parse_netlist(path):
-    """返回 (refs, nets: {netname: set((ref,pin))})"""
+    """返回 (refs, nets: {netname: set((ref,pin))})。
+
+    ⚠️ 按 `(net` 块切分再抓 name/node，不假设缩进与单行格式
+    （kicadsexpr 展开格式里 `(net` 与 `(code` 不在同一行）。
+    同名网跨 chunk 合并（理论上不应出现，防御性）。
+    """
     txt = open(path, encoding="utf-8").read()
     refs = set(re.findall(r'\(comp\s+\(ref\s+"([^"]+)"\)', txt))
     nets = {}
-    for m in re.finditer(r'\(net\s+\(code\s+"[^"]*"\)\s+\(name\s+"([^"]+)"\)(.*?)\n\t\t\)\n', txt, re.S):
-        name, body = m.group(1), m.group(2)
-        nodes = set()
-        for nm in re.finditer(r'\(node\s+\(ref\s+"([^"]+)"\)\s+\(pin\s+"([^"]+)"\)', body):
-            nodes.add((nm.group(1), nm.group(2)))
-        nets[name.lstrip("/")] = nodes
+    for chunk in txt.split("(net")[1:]:
+        nm = re.search(r'\(name\s+"([^"]+)"', chunk)
+        if not nm:
+            continue
+        name = nm.group(1).lstrip("/")
+        nodes = set(re.findall(r'\(ref\s+"([^"]+)"\)\s*\(pin\s+"([^"]+)"\)', chunk))
+        nets[name] = nets.get(name, set()) | nodes
     return refs, nets
 
 
 def main():
     all_refs = set()
     all_nets = collections.defaultdict(set)
-    for sh in SHEETS:
-        out = os.path.join(TMP, "nl_" + os.path.basename(sh) + ".net")
-        r = subprocess.run(
-            [KICAD_CLI, "sch", "export", "netlist", "--format", "kicadsexpr", "-o", out,
-             os.path.join(PCB, sh)],
-            capture_output=True, text=True, encoding="utf-8", errors="replace")
-        if r.returncode != 0:
-            print(f"❌ 网表导出失败: {sh}")
-            return 1
-        refs, nets = parse_netlist(out)
-        all_refs |= refs
-        for n, nodes in nets.items():
-            all_nets[n] |= nodes
+    out = os.path.join(TMP, "nl_root.net")
+    r = subprocess.run(
+        [KICAD_CLI, "sch", "export", "netlist", "--format", "kicadsexpr", "-o", out,
+         os.path.join(PCB, ROOT_SHEET)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        print(f"❌ 网表导出失败: {ROOT_SHEET}")
+        print((r.stderr or "")[-800:])
+        return 1
+    refs, nets = parse_netlist(out)
+    all_refs |= refs
+    for n, nodes in nets.items():
+        all_nets[n] |= nodes
 
     sw = sorted([r for r in all_refs if r.startswith("SW")], key=lambda s: int(s[2:]))
-    dd = sorted([r for r in all_refs if r.startswith("D") and not r.startswith("SW")],
+    # ⚠️ 只统计矩阵二极管 D1..D95 —— 根图整体网表还含电源子图（充电 LED 的位号
+    #    是 D96，刻意顺延避开矩阵），别把它算进矩阵断言。
+    dd = sorted([r for r in all_refs if re.fullmatch(r"D(\d+)", r) and 1 <= int(r[1:]) <= 95],
                 key=lambda s: int(s[1:]))
     nets = dict(all_nets)
     rows = sorted([n for n in nets if n.startswith("ROW")], key=lambda s: int(s[3:]))
@@ -169,9 +182,11 @@ def main():
             bad.append(d)
     check("每个二极管阳极接开关", not bad, f"异常 {bad[:5]}")
 
-    # 列网络节点合计 = 95
+    # 列网络节点合计 = 键数 + 595 驱动端
+    # （B2 起 COL0..17 每条网额外含 1 个 74HC595 输出引脚：95 + 18 = 113；
+    #   2026-09-18 前该值是 95 —— 当时列网还没有驱动端，跨图也未连通）
     tot = sum(len(nets[c]) for c in cols)
-    check("列网络节点合计 = 95", tot == 95, f"实际 {tot}")
+    check("列网络节点合计 = 95 键 + 18 个 595 驱动端 = 113", tot == 113, f"实际 {tot}")
 
     # (row, col) 组合唯一 —— 矩阵无冲突
     combos = collections.Counter()

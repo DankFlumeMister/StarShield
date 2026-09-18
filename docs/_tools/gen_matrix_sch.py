@@ -225,9 +225,17 @@ def build_matrix_sheet_file(sheet_uuid, rows, keys, ncol):
         sw_p2 = xs + 5.08
         d_a = xd - 3.81
         d_k = xd + 3.81
+        # ⚠️ ROW/COL 必须是【全局标签】(global_label)，不能用局部 label：
+        #    KiCad 的局部标签作用域是单张 sheet —— 三张矩阵子图的同名 COL 在真实
+        #    网表里带各自的 sheet 路径前缀（如 /矩阵行 R0-R1/COL0），互不相连。
+        #    这个坑曾被「单图导出 + 按名合并」的校验方式掩盖（2026-09-18 B2 时用
+        #    根图整体网表证实并修复）。控制板子图也用同名全局标签接入。
+        #    shape 用 passive，与 gen_power_sch.py 一致（不同 shape 同名会触发
+        #    ERC [global_label_not_shape_matched]）。
         body.append(
-            f'\t(label "ROW{r}" (at {xs-5.08:.2f} {y:.2f} 180) (fields_autoplaced yes)\n'
-            f'\t\t(effects (font (size 1.0 1.0)) (justify right bottom))\n'
+            f'\t(global_label "ROW{r}" (shape passive) (at {xs-5.08:.2f} {y:.2f} 180)'
+            f' (fields_autoplaced yes)\n'
+            f'\t\t(effects (font (size 1.0 1.0)) (justify right))\n'
             f'\t\t(uuid "{uid(nm + ":lblrow")}")\n\t)'
         )
         body.append(f'\t(wire (pts (xy {sw_p2:.2f} {y:.2f}) (xy {d_a:.2f} {y:.2f}))\n'
@@ -235,8 +243,9 @@ def build_matrix_sheet_file(sheet_uuid, rows, keys, ncol):
         body.append(f'\t(wire (pts (xy {d_k:.2f} {y:.2f}) (xy {d_k+5.08:.2f} {y:.2f}))\n'
                     f'\t\t(stroke (width 0) (type default)) (uuid "{uid(nm + ":w2")}"))')
         body.append(
-            f'\t(label "COL{c}" (at {d_k+5.08:.2f} {y:.2f} 0) (fields_autoplaced yes)\n'
-            f'\t\t(effects (font (size 1.0 1.0)) (justify left bottom))\n'
+            f'\t(global_label "COL{c}" (shape passive) (at {d_k+5.08:.2f} {y:.2f} 0)'
+            f' (fields_autoplaced yes)\n'
+            f'\t\t(effects (font (size 1.0 1.0)) (justify left))\n'
             f'\t\t(uuid "{uid(nm + ":lblcol")}")\n\t)'
         )
     return header(sheet_uuid, f"StarShield {'/'.join('R'+str(r) for r in rows)}") + body + footer()
