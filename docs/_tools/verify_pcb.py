@@ -39,8 +39,8 @@ ROOT_SHEET = os.path.join(PCB, "Starshield.kicad_sch")
 
 # ⚠️ DRC 豁免：kind -> 理由。带 `❓` 的表示尚未根因确认，投板前必须回看。
 DRC_ALLOW = {
-    "unconnected_items": "已布线（4 层，Freerouting）但**未完成**：剩 6 条未连通 —— "
-                         "VLED 断口 1、COL0 1、D17-A 2、VBUS 1、另 1。投板前必须清零；"
+    "unconnected_items": "已布线（4 层，Freerouting）但**未完成**：剩 5 条未连通 —— "
+                         "COL0 1、D17-A 2、VBUS 1、另 1。投板前必须清零；"
                          "详见 handoff §9 B4 的收尾清单。",
     "holes_co_located": "COL0 在 (3.6867, 62.8397) 有两个重合过孔（手工补线时多加了一个），"
                         "电气无害，属冗余；投板前删掉其一。",
