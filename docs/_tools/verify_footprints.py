@@ -41,22 +41,24 @@ SHEETS = [
 # 已知缺失 / 待办：写成豁免，避免每次都刷屏；但**必须带理由**，且要能追溯。
 #   键 = 完整 fp id（"库:名"）
 ALLOWED_MISSING = {
-    # ⚠️ B3 唯一未决项（2026-09-18 查证）：
-    #   ① 官方库**没有** MX 热插拔座封装（Button_Switch_Keyboard 只有 Cherry_MX 的
-    #      直焊 _PCB / 定位板 _Plate 变体，29 个全查过）；
-    #   ② 社区库 daprice/keyswitches.pretty 的 Kailh_socket_MX 是 **CC BY-SA 4.0**，
-    #      没有官方库那种「用于设计不受本许可约束」的例外 ⇒ 抄了会污染 CERN-OHL-S 链，
-    #      按项目硬规则**不可引入**；
-    #   ③ 可行出路 = 自画（Kailh MX socket 的几何是公开尺寸数据：2 个 SMD 焊盘
-    #      2.55×2.5 mm + 5 个 NPTH），或改决策为轴体直焊（用官方 SW_Cherry_MX_*_PCB）。
-    #   ⇒ 两种方案焊盘位置不同，不可混用；定案前本项保持豁免。
+    # ✅ B3 已定案（2026-09-18，用户选「自画」）⇒ 矩阵子图已改用
+    #    `StarShield:SW_MX_Hotswap_Optional_<宽度>u`（工程自带库，由 gen_footprints.py 生成）。
+    #    以下旧值**不应再出现**；若哪天子图里又冒出来，说明有生成器没同步。
     "Button_Switch_Keyboard:SW_MX_Hotswap":
-        "官方库无 / 社区库 CC BY-SA 不可抄；B3 待定：自画热插拔座封装 或 改轴体直焊（官方封装现成）",
+        "已被 StarShield:SW_MX_Hotswap_Optional_* 取代（B3 自画）；若出现说明有生成器未同步",
 }
 
 
 def find_footprint_dirs():
-    """定位 KiCad 官方封装库根目录（含 .pretty 子目录）。"""
+    """定位封装库根目录：先看**工程自带库**，再看 KiCad 官方库。
+
+    工程自带库 `hardware/pcb/StarShield/footprints/` 存放本项目自画的封装
+    （B3：MX 热插拔座 `StarShield:SW_MX_Hotswap_Optional_*`）——
+    因为官方库没有热插拔座，而社区库是 CC BY-SA 4.0（无官方库那种例外条款）不可引入。
+    """
+    proj = os.path.join(PCB, "footprints")
+    if os.path.isdir(proj):
+        return proj
     cands = []
     env = os.environ.get("KICAD_FOOTPRINT_DIR")
     if env:
@@ -71,6 +73,27 @@ def find_footprint_dirs():
         if os.path.isdir(c):
             return c
     return None
+
+
+# 官方库（用于「工程库里没有就去官方库找」的兜底查找）
+OFFICIAL_FP_DIRS = None
+
+
+def _official_dirs():
+    global OFFICIAL_FP_DIRS
+    if OFFICIAL_FP_DIRS is None:
+        import glob
+        cands = []
+        env = os.environ.get("KICAD_FOOTPRINT_DIR")
+        if env:
+            cands.append(env)
+        for drive in "CDEFGH":
+            cands += glob.glob(rf"{drive}:\Kicad\share\kicad\footprints")
+            cands += glob.glob(rf"{drive}:\Program Files\KiCad\*\share\kicad\footprints")
+        cands += ["/usr/share/kicad/footprints",
+                  "/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints"]
+        OFFICIAL_FP_DIRS = [c for c in cands if os.path.isdir(c)]
+    return OFFICIAL_FP_DIRS
 
 
 def collect_footprints():
@@ -112,11 +135,18 @@ def main():
             missing[fp] = (where, "格式非法（应为 库:名）")
             continue
         lib, name = fp.split(":", 1)
+        # 先查工程自带库，再退回官方库
         path = os.path.join(fpdir, f"{lib}.pretty", f"{name}.kicad_mod")
+        if not os.path.exists(path):
+            for od in _official_dirs():
+                p2 = os.path.join(od, f"{lib}.pretty", f"{name}.kicad_mod")
+                if os.path.exists(p2):
+                    path = p2
+                    break
         if os.path.exists(path):
             ok[fp] = (where, path)
         else:
-            missing[fp] = (where, f"不存在：{lib}.pretty/{name}.kicad_mod")
+            missing[fp] = (where, f"不存在：{lib}.pretty/{name}.kicad_mod（工程库与官方库均无）")
 
     print("=" * 70)
     print(f"A. 存在于官方库的封装：{len(ok)} 种（覆盖 {sum(len(v) for v, _ in ok.values())} 个元件）")

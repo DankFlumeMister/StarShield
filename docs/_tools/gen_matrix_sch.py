@@ -66,6 +66,30 @@ SHEETS = [
     ("matrix_r45", "矩阵行 R4-R5", [4, 5]),
 ]
 
+# ---------------------------------------------------------------------------
+# 轴体封装（B3，2026-09-18）：工程自带的 MX 热插拔座封装
+#   hardware/pcb/StarShield/footprints/StarShield.pretty/SW_MX_Hotswap_Optional_<宽度>u
+#   由 docs/_tools/gen_footprints.py 生成（孔位与 stabilizer 间距取自官方
+#   SW_Cherry_MX_<宽度>u_PCB，另加 Kailh socket 的 B.Cu SMD 焊盘）。
+# ⚠️ **必须按 stabilizer（卫星轴）宽度选档**：官方按宽度分档正是为此
+#    （官方库没有独立的 stabilizer 封装）。2u 以下不需要 stabilizer。
+# ---------------------------------------------------------------------------
+_FP_BY_W = {1.0: "1.00", 1.25: "1.25", 1.5: "1.50", 1.75: "1.75",
+            2.0: "2.00", 2.25: "2.25", 2.75: "2.75", 6.25: "6.25"}
+ENTER_INDEX = 52      # 主键区阶梯 Enter（index 从 1 起，见 matrix.json）
+
+
+def switch_footprint(k):
+    """按键的宽/高选出正确的轴体封装档位。"""
+    w, h = float(k["w_u"]), float(k["h_u"])
+    # 阶梯 Enter：主轮廓 1.5u 宽，但下半合并宽 2.25u ⇒ stabilizer 按 2.25u
+    if k["index"] == ENTER_INDEX:
+        return "StarShield:SW_MX_Hotswap_Optional_2.25u"
+    # 1u × 2u 的竖键（小键盘 Delete / Enter）：竖向 stabilizer
+    if h == 2 and w == 1:
+        return "StarShield:SW_MX_Hotswap_Optional_2.00u_Vertical"
+    return "StarShield:SW_MX_Hotswap_Optional_" + _FP_BY_W.get(w, "1.00u") + "u"
+
 SW_SYM = """\t\t(symbol "Switch:SW_Push"
 \t\t\t(pin_numbers (hide yes))
 \t\t\t(pin_names (offset 1.016) (hide yes))
@@ -194,7 +218,7 @@ def build_matrix_sheet_file(sheet_uuid, rows, keys, ncol):
             f'\t\t\t(effects (font (size 1.27 1.27))))\n'
             f'\t\t(property "Value" "{val}" (at {xs:.2f} {y+3.81:.2f} 0)\n'
             f'\t\t\t(effects (font (size 1.27 1.27))))\n'
-            f'\t\t(property "Footprint" "Button_Switch_Keyboard:SW_MX_Hotswap" (at {xs:.2f} {y+5.08:.2f} 0)\n'
+            f'\t\t(property "Footprint" "{switch_footprint(k)}" (at {xs:.2f} {y+5.08:.2f} 0)\n'
             f'\t\t\t(effects (font (size 1.27 1.27)) (hide yes)))\n'
             f'\t\t(property "Datasheet" "" (at {xs:.2f} {y+5.08:.2f} 0)\n'
             f'\t\t\t(effects (font (size 1.27 1.27)) (hide yes)))\n'
