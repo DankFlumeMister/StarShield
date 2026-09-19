@@ -17,7 +17,7 @@
 | 项目 | nice!nano v2 | SuperMini nRF52840 |
 | --- | --- | --- |
 | **GPIO 总数** | **21 个** ✅ 官方措辞：「3 extra GPIO pins offering a total of 21 GPIO pins」（另 3 个不占 2×12 主排针） | ❓ UNVERIFIED（无官方 datasheet） |
-| 主排针布局 | 2×12 @ 2.54mm、列距 15.24mm（旁证已升级：marbastlib 社区封装 + 零售商「2x 12-pin headers」双重一致，2026-09-19；**仍待 B6 实物卡尺定案**，清单见 `nice-nano-physical-verification.md`） | 同（旁证） |
+| 主排针布局 | **2×13 @ 2.54mm（26 孔）**——✅ 官方 pinout 图 + 实物清点双重确认（2026-09-19，B6 到货量测）；比 Pro Micro（2×12）每排多 1 孔、多在 USB 端（左排多 GND、右排多 B+）；主板长度 34.0 mm。早期「2×12」记载系旁证误导，已证伪；逐孔映射见 `nice-nano-physical-verification.md` §6.2 | 同为 2×13 的是 SuperMini 逆向件旁证（1×13 两条）；仍以实物为准 |
 | 板厚 | **3.2 mm**（mid-mount USB-C） | ❓ UNVERIFIED |
 | 电池电压 ADC | **P0.04 (AIN2)**，官方明确「不能作其他用途」 | **P0.24**（原理图错标为 P0.04） |
 | VCC 门控 | **P0.13 置高可切断 VCC**（官方说明用于省掉 LED 静态功耗） | 存在 NPQ2/NBD1/NPR7 电源路径电路 |
