@@ -36,7 +36,10 @@ b = pcbnew.LoadBoard(P)
 zones = list(b.Zones())
 print(f"铺铜区数量: {len(zones)}")
 for z in zones:
-    print(f"  net={z.GetNetname():10} layer={z.GetLayerName():6} "
+    # ⚠️ 不要用 z.GetLayerName() —— ZONE 是多层对象，实测它**恒返回 F.Cu**（SWIG 行为），
+    #    会让人误以为铺铜全落到了顶层。必须读 LayerSet。
+    names = ",".join(pcbnew.LayerName(x) for x in z.GetLayerSet().Seq()) or "(空)"
+    print(f"  net={z.GetNetname():10} layers={names:16} "
           f"priority={z.GetAssignedPriority()}")
 ok = pcbnew.ZONE_FILLER(b).Fill(zones)
 print("Fill 返回:", ok)
