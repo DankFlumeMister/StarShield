@@ -172,10 +172,11 @@ def main():
         check("根图整体网表导出", False, "导出失败，跳过 B 组（这本身是失败）")
     else:
         # ROW：J3A 引脚 + 该行全部矩阵开关（精确值 = 行键数 + 1，来源 matrix-assign 输出）
+        # ⚠️ 2026-09-19 B6-1：孔号随实物修正（每排 13 孔）；行线整体后移一孔
         row_expect = {
-            "ROW0": (("J3A", "7"), 17), "ROW1": (("J3A", "8"), 19),
-            "ROW2": (("J3A", "9"), 19), "ROW3": (("J3A", "10"), 16),
-            "ROW4": (("J3A", "12"), 18), "ROW5": (("J3A", "11"), 12),
+            "ROW0": (("J3A", "8"), 17), "ROW1": (("J3A", "9"), 19),
+            "ROW2": (("J3A", "10"), 19), "ROW3": (("J3A", "11"), 16),
+            "ROW4": (("J3A", "13"), 18), "ROW5": (("J3A", "12"), 12),
         }
         for r, ((ref, pin), n_expect) in row_expect.items():
             nodes = got_root.get(r, set())
@@ -194,15 +195,16 @@ def main():
             nodes = got_root.get(c, set())
             check(f"{c} 连接 {ref}.{pin} 与矩阵二极管（≥3 元件）",
                   (ref, pin) in nodes and len(nodes) >= 3, f"{len(nodes)} 元件")
-        check("RGB_PWR_EN 跨图连通（J3B + 电源子图 R8）",
-              got_root.get("RGB_PWR_EN") == {("J3B", "12"), ("R8", "1")},
+        check("RGB_PWR_EN 跨图连通（J3B 孔13 + 电源子图 R8）",
+              got_root.get("RGB_PWR_EN") == {("J3B", "13"), ("R8", "1")},
               str(sorted(got_root.get("RGB_PWR_EN", set()))))
-        check("OUT 跨图连通（J3B.RAW + 电源子图 U1/Q1/R6/R7/C2）",
+        check("OUT 跨图连通（J3B 孔1/2 = B+ + 电源子图 U1/Q1/R6/R7/C2）",
               ("J3B", "1") in got_root.get("OUT", set())
               and {"U1", "Q1", "R6", "R7", "C2"} <= {r for r, _ in got_root.get("OUT", set())})
         # 2026-09-18 M5 后：RGB 子图已绘制，LED_DIN 的另一端是 LED1.DIN
-        check("LED_DIN 跨图连通（J3A.1 + RGB 子图 LED1.DIN）",
-              got_root.get("LED_DIN") == {("J3A", "1"), ("LED1", "2")},
+        # ⚠️ 2026-09-19 B6-1：LED_DIN 随实物孔序移到 J3A 孔 2（孔 1 是 GND）
+        check("LED_DIN 跨图连通（J3A 孔2 + RGB 子图 LED1.DIN）",
+              got_root.get("LED_DIN") == {("J3A", "2"), ("LED1", "2")},
               str(sorted(got_root.get("LED_DIN", set()))))
 
     # ------------------------------------------------------------------
@@ -216,12 +218,12 @@ def main():
     check("级联链：U3.QH'(9) 与 U4.SER(14) 同网 CASCADE2",
           g.get("CASCADE2") == {("U3", "9"), ("U4", "14")}, str(sorted(g.get("CASCADE2", set()))))
     # 控制脚共享：SRCLK/RCLK 三颗同网；SER 只在 U2 上接 MOSI
-    check("三颗 595 的 SRCLK(11) 共网 595_SCK，且源头是 J3B.9(PM21=P1.13)",
-          g.get("595_SCK") == {("U2", "11"), ("U3", "11"), ("U4", "11"), ("J3B", "9")})
-    check("三颗 595 的 RCLK(12) 共网 595_RCLK，且源头是 J3B.7(PM19=P0.02, spi1 CS)",
-          g.get("595_RCLK") == {("U2", "12"), ("U3", "12"), ("U4", "12"), ("J3B", "7")})
-    check("595_MOSI：J3B.11(PM23=P0.10) 只接 U2.SER(14)（链头）",
-          g.get("595_MOSI") == {("J3B", "11"), ("U2", "14")})
+    check("三颗 595 的 SRCLK(11) 共网 595_SCK，且源头是 J3B 孔10(D15=P1.13)",
+          g.get("595_SCK") == {("U2", "11"), ("U3", "11"), ("U4", "11"), ("J3B", "10")})
+    check("三颗 595 的 RCLK(12) 共网 595_RCLK，且源头是 J3B 孔8(D19=P0.02, spi1 CS)",
+          g.get("595_RCLK") == {("U2", "12"), ("U3", "12"), ("U4", "12"), ("J3B", "8")})
+    check("595_MOSI：J3B 孔12(D16=P0.10) 只接 U2.SER(14)（链头）",
+          g.get("595_MOSI") == {("J3B", "12"), ("U2", "14")})
     # ~SRCLR / ~OE
     for ref in ("U2", "U3", "U4"):
         check(f"{ref}.~SRCLR(10) 接 VCC（不复位）", (ref, "10") in g.get("VCC", set()))
@@ -237,23 +239,23 @@ def main():
     # 三档开关
     # ⚠️ 位号 SW96（不是 SW1）：原 SW1 与矩阵第一个开关重名，2026-09-18（B4）改名
     check("SW96 公共端(3) 接 GND（ACTIVE_LOW 读取）", ("SW96", "3") in g.get("GND", set()))
-    check("档 0（有线）：SW96.1 与 J3A.5(D2/P0.17) 同网 MODE0",
-          g.get("MODE0") == {("SW96", "1"), ("J3A", "5")})
-    check("档 1（蓝牙）：SW96.2 与 J3B.10(D14/P1.11) 同网 MODE1",
-          g.get("MODE1") == {("SW96", "2"), ("J3B", "10")})
-    check("档 2（2.4G）：SW96.4 与 J3B.8(D18/P1.15) 同网 MODE2",
-          g.get("MODE2") == {("SW96", "4"), ("J3B", "8")})
+    check("档 0（有线）：SW96.1 与 J3A 孔6(D2/P0.17) 同网 MODE0",
+          g.get("MODE0") == {("SW96", "1"), ("J3A", "6")})
+    check("档 1（蓝牙）：SW96.2 与 J3B 孔11(D14/P1.11) 同网 MODE1",
+          g.get("MODE1") == {("SW96", "2"), ("J3B", "11")})
+    check("档 2（2.4G）：SW96.4 与 J3B 孔9(D18/P1.15) 同网 MODE2",
+          g.get("MODE2") == {("SW96", "4"), ("J3B", "9")})
     # 供电
-    check("nice!nano RAW(J3B.1) 接电源子图系统轨 OUT（不是 VBUS）",
+    check("nice!nano B+(J3B 孔1) 接电源子图系统轨 OUT（不是 VBUS）",
           ("J3B", "1") in g.get("OUT", set()) and ("J3B", "1") not in g.get("VBUS", set()))
-    check("nice!nano VCC(J3B.4) 是 VCC 网唯一源头（3.3V 轨）",
-          ("J3B", "4") in g.get("VCC", set()))
+    check("nice!nano 3.3V(J3B 孔5) 是 VCC 网唯一源头（3.3V 轨）",
+          ("J3B", "5") in g.get("VCC", set()))
     for c in ("C4", "C5", "C6"):
         check(f"{c}：VCC-GND 去耦（每颗 595 一颗）",
               (c, "1") in g.get("VCC", set()) and (c, "2") in g.get("GND", set()))
     # 行线的交错顺序（与 overlay row-gpios 一一对应）
-    check("行线交错顺序：J3A.12=ROW4、J3A.11=ROW5（overlay 第5/6项 = PM9/PM8）",
-          ("J3A", "12") in g.get("ROW4", set()) and ("J3A", "11") in g.get("ROW5", set()))
+    check("行线交错顺序：J3A 孔13=ROW4、孔12=ROW5（overlay 第5/6项 = D9/D8）",
+          ("J3A", "13") in g.get("ROW4", set()) and ("J3A", "12") in g.get("ROW5", set()))
 
     # ------------------------------------------------------------------
     print("=" * 66)

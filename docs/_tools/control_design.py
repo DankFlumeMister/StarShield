@@ -44,30 +44,33 @@ PAPER = "A3"
 #   props: 附加属性（MPN / LCSC 等），便于新手直接下单
 # ---------------------------------------------------------------------------
 
-# nice!nano v2 排针为什么是两个 Conn_01x12：
+# nice!nano v2 排针为什么是两个 Conn_01x13（B6-1 修正，2026-09-19）：
 #   1) KiCad 官方库没有 Pro_Micro / nice!nano 符号（223 个库全查过）；
-#   2) 两条 1x12 恰好对应本项目的插座形态 —— decisions.md「PCB 通孔 + Mill-Max
-#      插座」，Mill-Max 插座就是两条 1x12 排母；
-#   3) 引脚号 1..12 与 Pro Micro 标号**直接一致**（J3A.n = Pro Micro 标号 n，
-#      J3B.n = Pro Micro 标号 12+n），杜绝 2x12 符号「引脚号 ≠ 排针标号」的心智负担。
+#   2) ⚠️ **实物核对推翻了原「每排 12 孔」的旁证**：nice!nano v2 每排 **13 孔**
+#      （官方 pinout 图 + 实物清点一致）。比 Pro Micro 每排多 1 孔，**多在 USB 端**
+#      ——左排顶端多 1 个 GND、右排顶端多 1 个 B+（故右排 B+ 有两个孔）。
+#      原 1x12 映射会把 J3B 的 VCC 插到实物的 RESET 上（致命），已修。
+#   3) 引脚号 1..13 **直接对应实物孔位序号（自 USB 端起）**，不再用「Pro Micro 标号」
+#      心智模型（那个模型在 26 孔的 v2 上不成立）。D 编号 ↔ GPIO 的映射仍依
+#      ZMK arduino_pro_micro_pins.dtsi，与孔位序号无关。
 #
-# 封装（B3，2026-09-18）：`Connector_PinSocket_2.54mm:PinSocket_1x12_P2.54mm_Vertical`
-#   官方库**没有** Connector_Mill-Max（155 个 .pretty 全查过）⇒ 用通用 1x12 排母封装。
+# 封装（B6-1）：`Connector_PinSocket_2.54mm:PinSocket_1x13_P2.54mm_Vertical`
+#   官方库**没有** Connector_Mill-Max（155 个 .pretty 全查过）⇒ 用通用 1x13 排母封装。
 #   孔径匹配：排母封装焊盘孔径 1.0 mm；Mill-Max 315-43-1xx 系列推荐 PCB 孔径约 0.94 mm
 #   ⇒ 可焊，但**具体料号与孔径仍须投板前用实物核对（并入 B6）**。
 COMPONENTS = [
-    # --- J3A：nice!nano v2 左列（Pro Micro 标号 1..12，自上而下）-------------
-    dict(ref="J3A", lib="Connector_Generic:Conn_01x12", value="nice!nano v2 左列 (PM 1-12)",
-         fp="Connector_PinSocket_2.54mm:PinSocket_1x12_P2.54mm_Vertical",
+    # --- J3A：nice!nano v2 左列（实物孔位 1..13，自 USB 端起，自上而下）--------
+    dict(ref="J3A", lib="Connector_Generic:Conn_01x13", value="nice!nano v2 左列 (孔 1-13)",
+         fp="Connector_PinSocket_2.54mm:PinSocket_1x13_P2.54mm_Vertical",
          at=(50.8, 139.7), rot=0,
-         props={"MPN": "Mill-Max 315-43-112-41-001000 ❓待核",
-                "Note": "J3A.n = Pro Micro 标号 n；映射依据 ZMK arduino_pro_micro_pins.dtsi"}),
-    # --- J3B：nice!nano v2 右列（Pro Micro 标号 13..24，自上而下）-------------
-    dict(ref="J3B", lib="Connector_Generic:Conn_01x12", value="nice!nano v2 右列 (PM 13-24)",
-         fp="Connector_PinSocket_2.54mm:PinSocket_1x12_P2.54mm_Vertical",
+         props={"MPN": "Mill-Max 315-43-113-41-001000 ❓待核",
+                "Note": "J3A.n = 实物孔位序号（USB 端起）；D 编号见注释，依据 ZMK gpio-map"}),
+    # --- J3B：nice!nano v2 右列（实物孔位 1..13，自 USB 端起，自上而下）--------
+    dict(ref="J3B", lib="Connector_Generic:Conn_01x13", value="nice!nano v2 右列 (孔 1-13)",
+         fp="Connector_PinSocket_2.54mm:PinSocket_1x13_P2.54mm_Vertical",
          at=(76.2, 139.7), rot=0,
-         props={"MPN": "Mill-Max 315-43-112-41-001000 ❓待核",
-                "Note": "J3B.n = Pro Micro 标号 12+n；RAW(PM13) 接 OUT，VCC(PM16) 是 3.3V 轨"}),
+         props={"MPN": "Mill-Max 315-43-113-41-001000 ❓待核",
+                "Note": "J3B.1/2 = B+(RAW) 接 OUT；孔 5 = 3.3V(VCC)；孔 4 = RESET 不接"}),
 
     # --- 列驱动：3 颗 74HC595 级联 -------------------------------------------
     # ⚠️ 2026-09-18 修订（ADR-0008）：**3 颗**，不是 2 颗。
@@ -116,7 +119,7 @@ COMPONENTS = [
 #
 # 网名约定：
 #   GND                  —— power:GND 电源符号（全局；PWR_FLAG 已由电源子图提供）
-#   VCC                  —— power:VCC 电源符号（全局 3.3V 轨；本子图内由 J3B.16 驱动，
+#   VCC                  —— power:VCC 电源符号（全局 3.3V 轨；本子图内由 J3B.5 驱动，
 #                           需 PWR_FLAG —— 见 PWR_FLAGS）
 #   OUT / RGB_PWR_EN     —— 全局标签（与电源子图接口）
 #   ROW0..5 / COL0..17   —— 全局标签（与矩阵子图接口，2026-09-18 起矩阵侧同为全局标签）
@@ -124,37 +127,43 @@ COMPONENTS = [
 #   595_MOSI / 595_SCK / 595_RCLK / CASCADE1 / CASCADE2 / MODE0..2 —— 本子图局部标签
 # ---------------------------------------------------------------------------
 CONN = {
-    # --- J3A（Pro Micro 标号 1..12）-----------------------------------------
-    "J3A.1": "LED_DIN",     # TX0 / D1  / P0.06 —— WS2812 数据（&spi3 MOSI）
-    "J3A.2": None,          # RX1 / D0  / P0.08 —— NC。原厂 UART TX；P0.06(RX) 已被
+    # --- J3A（实物孔位 1..13，自 USB 端起）-----------------------------------
+    #   官方顺序：1 GND · 2 D1 · 3 D0 · 4 GND · 5 GND · 6 D2 · 7 D3 · 8 D4 ·
+    #             9 D5 · 10 D6 · 11 D7 · 12 D8 · 13 D9
+    "J3A.1": "GND",         # 孔 1 —— v2 比 Pro Micro 多出的 GND（USB 端）
+    "J3A.2": "LED_DIN",     # D1  / P0.06 —— WS2812 数据（&spi3 MOSI）
+    "J3A.3": None,          # D0  / P0.08 —— NC。原厂 UART TX；P0.06(RX) 已被
                             #   WS2812 占用 ⇒ 串口日志本就不可用，此脚留作余量
-    "J3A.3": "GND",
     "J3A.4": "GND",
-    "J3A.5": "MODE0",       # D2  / P0.17 —— 档 0：有线
-    "J3A.6": None,          # D3  / P0.20 —— NC，留普通 GPIO 余量
-    "J3A.7": "ROW0",        # D4/A6 / P0.22
-    "J3A.8": "ROW1",        # D5    / P0.24
-    "J3A.9": "ROW2",        # D6/A7 / P1.00
-    "J3A.10": "ROW3",       # D7    / P0.11
-    "J3A.11": "ROW5",       # D8/A8 / P1.04 —— ⚠️ overlay row-gpios 第 6 项是 pro_micro 8
-    "J3A.12": "ROW4",       # D9/A9 / P1.06 —— overlay 第 5 项是 pro_micro 9
+    "J3A.5": "GND",
+    "J3A.6": "MODE0",       # D2  / P0.17 —— 档 0：有线
+    "J3A.7": None,          # D3  / P0.20 —— NC，留普通 GPIO 余量
+    "J3A.8": "ROW0",        # D4/A6 / P0.22
+    "J3A.9": "ROW1",        # D5    / P0.24
+    "J3A.10": "ROW2",       # D6/A7 / P1.00
+    "J3A.11": "ROW3",       # D7    / P0.11
+    "J3A.12": "ROW5",       # D8/A8 / P1.04 —— ⚠️ overlay row-gpios 第 6 项是 pro_micro 8
+    "J3A.13": "ROW4",       # D9/A9 / P1.06 —— overlay 第 5 项是 pro_micro 9
 
-    # --- J3B（引脚号 1..12 = Pro Micro 标号 13..24，即 J3B.n = 标号 12+n）----
-    "J3B.1": "OUT",         # RAW(PM13) —— nice!nano 板载稳压输入，接电源子图系统轨 OUT。
+    # --- J3B（实物孔位 1..13，自 USB 端起）-----------------------------------
+    #   官方顺序：1 B+ · 2 B+ · 3 GND · 4 RESET · 5 3.3V · 6 D21 · 7 D20 ·
+    #             8 D19 · 9 D18 · 10 D15 · 11 D14 · 12 D16 · 13 D10
+    "J3B.1": "OUT",         # B+ #1 —— nice!nano 板载稳压输入，接电源子图系统轨 OUT。
                             #   ⚠️ 不是接 VBUS：电池供电时也必须有电（OUT = IN/BAT 较高者）
-    "J3B.2": "GND",         # PM14
-    "J3B.3": None,          # RST(PM15) —— NC：nice!nano 板载复位按钮够用（双击进 bootloader）
-    "J3B.4": "VCC",         # VCC(PM16) —— nice!nano 输出的 3.3V 轨，给 3 颗 595 供电
-    "J3B.5": None,          # D21/A3 / P0.31 (PM17) —— NC。**ADC 脚保留**（外接模拟量的
+    "J3B.2": "OUT",         # B+ #2 —— 与孔 1 同网（实物为同一网络的两个孔），并联冗余
+    "J3B.3": "GND",         # 孔 3 —— v2 比 Pro Micro 多出的 GND（USB 端）
+    "J3B.4": None,          # RESET —— NC：nice!nano 板载复位按钮够用（双击进 bootloader）
+    "J3B.5": "VCC",         # 3.3V —— nice!nano 输出的 3.3V 轨，给 3 颗 595 供电
+    "J3B.6": None,          # D21/A3 / P0.31 —— NC。**ADC 脚保留**（外接模拟量的
                             #   可能性：电量精确分压 / 温度）。⚠️ nice!nano v2 板载电池
                             #   分压在 P0.04（不在排针上），与此脚无冲突
-    "J3B.6": None,          # D20/A2 / P0.29 (PM18) —— NC，ADC 脚保留
-    "J3B.7": "595_RCLK",    # D19/A1 / P0.02 (PM19) —— 595 并行锁存（spi1 cs-gpios）
-    "J3B.8": "MODE2",       # D18/A0 / P1.15 (PM20) —— 档 2：2.4G（Dongle）
-    "J3B.9": "595_SCK",     # D15    / P1.13 (PM21)
-    "J3B.10": "MODE1",      # D14    / P1.11 (PM22) —— 档 1：蓝牙
-    "J3B.11": "595_MOSI",   # D16    / P0.10 (PM23)
-    "J3B.12": "RGB_PWR_EN", # D10/A10 / P0.09 (PM24) —— 去电源子图 Q2 栅极（拓扑 C 反相级）
+    "J3B.7": None,          # D20/A2 / P0.29 —— NC，ADC 脚保留
+    "J3B.8": "595_RCLK",    # D19/A1 / P0.02 —— 595 并行锁存（spi1 cs-gpios）
+    "J3B.9": "MODE2",       # D18/A0 / P1.15 —— 档 2：2.4G（Dongle）
+    "J3B.10": "595_SCK",    # D15    / P1.13
+    "J3B.11": "MODE1",      # D14    / P1.11 —— 档 1：蓝牙
+    "J3B.12": "595_MOSI",   # D16    / P0.10
+    "J3B.13": "RGB_PWR_EN", # D10/A10 / P0.09 —— 去电源子图 Q2 栅极（拓扑 C 反相级）
 
     # --- U2（级联第 1 颗，bit0..7）-------------------------------------------
     "U2.15": "COL0",        # QA
@@ -211,7 +220,7 @@ GLOBAL_NETS = {"OUT", "RGB_PWR_EN", "ROW0", "ROW1", "ROW2", "ROW3", "ROW4", "ROW
                "COL15", "COL16", "COL17", "LED_DIN"}
 
 # ---------------------------------------------------------------------------
-# PWR_FLAG：VCC 网在本子图内只由 J3B.16（passive）驱动，没有 power_out 引脚
+# PWR_FLAG：VCC 网在本子图内只由 J3B.5（passive）驱动，没有 power_out 引脚
 #   ⇒ 需要一个 PWR_FLAG，否则单图 ERC [power_pin_not_driven] error。
 #
 # ⚠️ **GND 不要在本图加 flag**：GND 是全局电源网，电源子图已经有一个 PWR_FLAG。
@@ -234,9 +243,10 @@ NOTES = [
      "改电路请改 docs/_tools/control_design.py。依据：docs/adr/0008(修订) / 0009 / "
      "docs/controller-and-battery-facts.md / ZMK arduino_pro_micro_pins.dtsi"),
     (25.4, 43.18,
-     "【排针映射】J3A.n = Pro Micro 标号 n（1..12），J3B.n = 标号 12+n（13..24）。"
-     "映射来自 ZMK 官方 v0.3 nice_nano 的 arduino_pro_micro_pins.dtsi。"
-     "投板前必须用实物核对排针 pitch / 每边脚数（handoff B6）"),
+     "【排针映射】J3A.n / J3B.n = nice!nano v2 **实物孔位序号（自 USB 端起，每排 13 孔）**。"
+     "2026-09-19 B6 实物核对 + 官方 pinout 图确认每排 13 孔（比 Pro Micro 多 1 孔，多在 USB 端）；"
+     "原 1x12 映射已作废。D 编号 ↔ GPIO 仍依 ZMK arduino_pro_micro_pins.dtsi，与孔位序号无关。"
+     "逐孔映射表见 docs/nice-nano-physical-verification.md §6.2"),
     (25.4, 190.5,
      "【595 级联与位序】3 颗 74HC595（2026-09-18 修订，原 2 颗无法驱动 18 列 —— "
      "bit16/17 会被推出链尾）。位序：bit0..7 = U2.QA..QH = COL0..7；"
@@ -250,15 +260,16 @@ NOTES = [
      "开关 GPIO 定案 D2(P0.17) / D14(P1.11) / D18(P1.15)：保留 D0(UART 语义)、"
      "D3(普通余量)、D20/D21(ADC 余量)"),
     (25.4, 216.0,
-     "【供电】J3B.13(RAW) 接电源子图 OUT（系统轨 3.0-4.4V，电池/USB 较高者）—— "
-     "nice!nano 板载稳压后输出 VCC(PM16) 3.3V，给 3 颗 595 供电（负载轻，远低于 VCC 能力）。"
+     "【供电】J3B.1/2(B+) 接电源子图 OUT（系统轨 3.0-4.4V，电池/USB 较高者）—— "
+     "nice!nano 板载稳压后输出 VCC(孔 5) 3.3V，给 3 颗 595 供电（负载轻，远低于 VCC 能力）。"
      "WS2812 供电走 VLED（电源子图 Q1 门控后的 LED 轨），不在本子图 —— 见 RGB 子图(M5)"),
     (25.4, 228.6,
      "【与其它子图的接口】全局标签同名即相连：OUT/VLED/RGB_PWR_EN（电源子图）、"
      "ROW0..5 / COL0..17（矩阵子图，2026-09-18 起矩阵侧也是全局标签）、LED_DIN（RGB 子图，"
      "尚未绘制 ⇒ 本图 ERC 的 isolated warning 属已知待办）、GND（电源符号）"),
     (25.4, 241.3,
-     "【投板前核对】1) nice!nano 排针 pitch/脚数（B6）2) PCM13 封装 pad 与符号掷点对应（B3/B4）"
-     "3) J3A.11/12 = ROW5/ROW4 的交错顺序与 overlay row-gpios 一一对应（已按 overlay 核实，"
-     "但 PCB 布局时仍需复核）"),
+     "【投板前核对】1) nice!nano 排针 pitch/脚数已由 B6 实物核对（每排 13 孔，已改 1x13）"
+     "2) PCM13 封装 pad 与符号掷点对应（B3/B4）"
+     "3) J3A.12/13 = ROW5/ROW4 的交错顺序与 overlay row-gpios 一一对应（已按 overlay 核实，"
+     "但 PCB 布局时仍需复核）4) 排针针径与母座孔径、第五项：USB 口伸出量决定外壳开孔"),
 ]

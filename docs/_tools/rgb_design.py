@@ -18,7 +18,7 @@
 
 子图间接口（全局标签，与电源/控制子图同名即相连）：
     VLED  —— LED 供电轨（电源子图 Q1 门控后的电池直供轨，ADR-0007 / ADR-0005）
-    LED_DIN —— 数据链首颗的数据输入（控制子图 J3A.1 = P0.06，&spi3 MOSI）
+    LED_DIN —— 数据链首颗的数据输入（控制子图 J3A 孔2 = P0.06，&spi3 MOSI）
     GND   —— 电源符号
 
 设计依据：
@@ -120,7 +120,7 @@ NOTES = [
      "改电路请改 docs/_tools/rgb_design.py。依据：ADR-0007（电池直供不升压）、"
      "ADR-0005（门控拓扑 C）、ADR-0006（95 键）"),
     (25.4, 33.02,
-     "【数据链】LED1.DIN = LED_DIN（来自控制子图 J3A.1 = nice!nano D1/P0.06，&spi3 MOSI）；"
+     "【数据链】LED1.DIN = LED_DIN（来自控制子图 J3A 孔2 = nice!nano D1/P0.06，&spi3 MOSI）；"
      "LEDi.DOUT → LED(i+1).DIN 依次串联到 LED95；LED95.DOUT 悬空（链尾）。"
      "链序 = 键位 index 顺序（行优先、行内从左到右），与 ZMK 侧 LED index 一致"),
     (25.4, NOTE_Y,

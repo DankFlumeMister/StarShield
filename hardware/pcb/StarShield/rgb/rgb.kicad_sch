@@ -5752,7 +5752,7 @@
 	(text "StarShield RGB 子图 —— 由 docs/_tools/gen_rgb_sch.py 自动生成，请勿手改；改电路请改 docs/_tools/rgb_design.py。依据：ADR-0007（电池直供不升压）、ADR-0005（门控拓扑 C）、ADR-0006（95 键）" (exclude_from_sim no) (at 25.4 25.4 0)
 		(effects (font (size 1.27 1.27)) (justify left bottom))
 		(uuid "bd2ee145-1e5b-5d67-a8c8-d8c612034b69"))
-	(text "【数据链】LED1.DIN = LED_DIN（来自控制子图 J3A.1 = nice!nano D1/P0.06，&spi3 MOSI）；LEDi.DOUT → LED(i+1).DIN 依次串联到 LED95；LED95.DOUT 悬空（链尾）。链序 = 键位 index 顺序（行优先、行内从左到右），与 ZMK 侧 LED index 一致" (exclude_from_sim no) (at 25.4 33.02 0)
+	(text "【数据链】LED1.DIN = LED_DIN（来自控制子图 J3A 孔2 = nice!nano D1/P0.06，&spi3 MOSI）；LEDi.DOUT → LED(i+1).DIN 依次串联到 LED95；LED95.DOUT 悬空（链尾）。链序 = 键位 index 顺序（行优先、行内从左到右），与 ZMK 侧 LED index 一致" (exclude_from_sim no) (at 25.4 33.02 0)
 		(effects (font (size 1.27 1.27)) (justify left bottom))
 		(uuid "cb837b12-71f6-5c2b-b52f-e5fffb01834e"))
 	(text "【供电】全部灯珠的 VDD 接 VLED —— 电源子图中由电池直供、经 Q1(AO3401A) PMOS 门控的 LED 轨（ADR-0007：不加 5V 升压；ADR-0005：拓扑 C，MCU 经 2N7002 反相级控制）。VLED 按 2-3 A 走线；固件侧 CONFIG_ZMK_RGB_UNDERGLOW_BRT_MAX=30 是电流护栏（30% 灰阶约 1.0 A）" (exclude_from_sim no) (at 25.4 307.34000000000003 0)

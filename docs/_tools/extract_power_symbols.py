@@ -46,7 +46,8 @@ WANTED = [
     ("Device", "Fuse"),
     ("Device", "LED"),
     ("Connector_Generic", "Conn_01x02"),
-    ("Connector_Generic", "Conn_01x12"),     # B2：nice!nano 排针（每列一个，对应 Mill-Max 1x12 插座）
+    ("Connector_Generic", "Conn_01x13"),     # B2/B6-1：nice!nano 排针（v2 每排 13 孔，
+                                             #   2026-09-19 实物核对修正；原 1x12 系旁证误导）
     ("Transistor_FET", "2N7002"),
     ("Transistor_FET", "AO3401A"),
     ("74xx", "74HC595"),                     # B2：列驱动（3 颗级联，见 ADR-0008 修订）

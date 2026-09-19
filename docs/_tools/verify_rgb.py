@@ -4,7 +4,7 @@
 四组断言：
   A. 派生断言：rgb_design.py（由 matrix.json 生成）的连接表 vs 子图真实网表；
   B. 跨图接口：根图整体网表中 VLED 同时含电源子图 Q1 与 95 颗灯珠、
-     LED_DIN 同时含控制子图 J3A.1 与 LED1.DIN；
+     LED_DIN 同时含控制子图 J3A 孔2 与 LED1.DIN；
   C. 具名断言：数据链顺序（LEDi.DOUT ↔ LED(i+1).DIN）、链尾 NC、
      每颗 VDD→VLED / VSS→GND、灯珠数 95、位号与 index 对应；
   D. ERC 闸门：0 error，warning 全在豁免清单。
@@ -39,7 +39,7 @@ MATRIX = os.path.join(ROOT, "docs", "_generated", "matrix.json")
 
 # 单图视角的预期违规（另一端在别的子图上 / 驱动源是连接器 passive 引脚）：
 # 1) LED_DIN 在本图只有 LED1.DIN 一端 ⇒ isolated；
-# 2) LED1 的 DIN 是 input 引脚，真实驱动源是控制子图 J3A.1（连接器，passive）
+# 2) LED1 的 DIN 是 input 引脚，真实驱动源是控制子图 J3A 孔2（连接器，passive）
 #    ⇒ 单图 ERC 判「input pin not driven」。
 ALLOWED_WARNINGS = {
     ("isolated_pin_label", "Global Label 'LED_DIN'"),
@@ -159,8 +159,8 @@ def main():
         vled = got_root.get("VLED", set())
         check("VLED 跨图连通（电源子图 Q1 + 95 颗灯珠 = 96 元件）",
               ("Q1", "3") in vled and len(vled) == 96, f"{len(vled)} 元件")
-        check("LED_DIN 跨图连通（控制子图 J3A.1 + LED1.DIN）",
-              got_root.get("LED_DIN") == {("J3A", "1"), ("LED1", "2")},
+        check("LED_DIN 跨图连通（控制子图 J3A 孔2 + LED1.DIN；孔号随 2026-09-19 B6-1 修正）",
+              got_root.get("LED_DIN") == {("J3A", "2"), ("LED1", "2")},
               str(sorted(got_root.get("LED_DIN", set()))))
 
     # ------------------------------------------------------------------
