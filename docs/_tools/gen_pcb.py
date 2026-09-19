@@ -304,6 +304,36 @@ LAYERS = """	(layers
 		(35 "F.Fab" user)
 		(33 "B.Fab" user)
 	)"""
+
+# 层叠（2026-09-20 补）：**必须写出来**，否则铜厚只存在于厂家默认值里，
+# DRC 的载流相关检查与「内层到底多厚」都无从谈起（见 research/power-trace-width-precedent.md）。
+# 参数来源（都是一手样例，不是猜的）：
+#   - 结构与写法照抄社区 4 层板 `ScottoModules`（内层 1 oz）与 `Conejo`（JLC 默认内层 0.0152）；
+#     两者都实际投过板。
+#   - 本板**声明内层 1 oz（0.035）** —— 灯轨峰值 2.4 A 需要它
+#     （0.5 oz 内层下 2.4 A 需 3.43 mm 走线，不现实；1 oz 下 1.5 mm 即可 ≈2.24 A）。
+#   - ⚠️ 语法（官方文档 file-formats/sexpr-pcb）：**`(stackup)` 必须放在 `(setup)` 段内部**，
+#     不能放板级 —— 板级写法是 KiCad 5 的旧格式，KiCad 10 会直接报「未知标记 stackup」并拒绝加载。
+#     （社区样本 Conejo / ScottoModules 是老版本文件，不能照抄它们的位置。）
+#   - ⚠️ 下单时必须向厂家**明确指定内层 1 oz**；若厂家只给默认的 0.5 oz，
+#     加宽后的 1.5 mm 走线仍可覆盖固件护栏电流 1.0 A（0.5 oz 下 ≈1.35 A @ΔT20），但覆盖不了峰值。
+STACKUP = """	(stackup
+		(layer "F.SilkS" (type "Top Silk Screen"))
+		(layer "F.Paste" (type "Top Solder Paste"))
+		(layer "F.Mask" (type "Top Solder Mask") (thickness 0.01))
+		(layer "F.Cu" (type "copper") (thickness 0.035))
+		(layer "dielectric 1" (type "prepreg") (thickness 0.1) (material "FR4") (epsilon_r 4.5) (loss_tangent 0.02))
+		(layer "In1.Cu" (type "copper") (thickness 0.035))
+		(layer "dielectric 2" (type "core") (thickness 1.24) (material "FR4") (epsilon_r 4.5) (loss_tangent 0.02))
+		(layer "In2.Cu" (type "copper") (thickness 0.035))
+		(layer "dielectric 3" (type "prepreg") (thickness 0.1) (material "FR4") (epsilon_r 4.5) (loss_tangent 0.02))
+		(layer "B.Cu" (type "copper") (thickness 0.035))
+		(layer "B.Mask" (type "Bottom Solder Mask") (thickness 0.01))
+		(layer "B.Paste" (type "Bottom Solder Paste"))
+		(layer "B.SilkS" (type "Bottom Silk Screen"))
+		(copper_finish "None")
+		(dielectric_constraints no)
+	)"""
 # ⚠️ **4 层板（2026-09-19 用户定）**：
 #    - 层号与顺序**照抄 KiCad 自己写出来的形式**（不是按惯例猜）：`B.Cu` 的 id 是 **2**、不是 31；
 #      `In1.Cu`=4、`In2.Cu`=6。KiCad 也会把 F.SilkS/B.SilkS 的别名串去掉 —— 一并照抄。
@@ -329,6 +359,7 @@ def header(title, w, h, note):
 	)
 {LAYERS}
 	(setup
+{STACKUP}
 		(pad_to_mask_clearance 0)
 		(allow_soldermask_bridges_in_footprints no)
 		(tenting front back)

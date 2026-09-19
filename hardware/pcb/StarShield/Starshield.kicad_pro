@@ -309,8 +309,8 @@
         "schematic_color": "rgba(0, 0, 0, 0.000)",
         "track_width": 0.5,
         "tuning_profile": "",
-        "via_diameter": 0.8,
-        "via_drill": 0.4,
+        "via_diameter": 0.6,
+        "via_drill": 0.3,
         "wire_width": 6
       },
       {
@@ -337,23 +337,25 @@
       "version": 5
     },
     "net_colors": null,
-    "netclass_assignments": null,
+    "netclass_assignments": {
+      "OUT": [
+        "Power"
+      ],
+      "VBAT": [
+        "Power"
+      ],
+      "电源 {slash} 充电 {slash} RGB 门控/VCHG_IN": [
+        "Power"
+      ]
+    },
     "netclass_patterns": [
-      {
-        "netclass": "Power",
-        "pattern": "VBUS"
-      },
       {
         "netclass": "Power",
         "pattern": "VBAT"
       },
       {
         "netclass": "Power",
-        "pattern": "GND"
-      },
-      {
-        "netclass": "Power",
-        "pattern": "+3V3"
+        "pattern": "OUT"
       },
       {
         "netclass": "VLED",

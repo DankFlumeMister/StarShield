@@ -1,0 +1,26 @@
+# StarShield 自定义 DRC 规则（KiCad 的 .kicad_dru，需与板文件一并入库）
+#
+# 为什么要这个文件（2026-09-20 实测）：
+#   KiCad 内置的 track_width 检查只看「板级最小线宽约束」——
+#   把 design_settings.rules.min_track_width 从 0.127 改到 0.4，DRC 立刻报 199 条；
+#   但把网络类 Power 的 track_width 从 0.25 改到 0.5，违规数**纹丝不动**。
+#   ⇒ 内置检查**不按网络类生效**，而「电源网必须够宽」恰恰是必须按类约束的。
+#   官方文档：自定义规则存放于独立的 .kicad_dru 文件。
+#
+# 规则语言要点：规则**逆序**求值（文件末尾的先检查），匹配到即停止。
+
+(version 1)
+
+# 电源类（VBAT / OUT / VCHG_IN）走线最小 0.25 mm。
+# 为什么是 0.25 而不是更大：
+#   - 0.25 是「几何可达」与「能挡住 0.2 mm 默认线宽」的交点。
+#     Freerouting 与 KiCad 默认都出 0.2 mm；一旦电源网被重布成 0.2 mm，这里会立刻报出来。
+#   - 更大的值（如 0.5）会把 U1(BQ24072, VQFN) 的引出短桩
+#     （0.25 mm，被相邻焊盘夹死，加不宽）变成永久违规 —— 纯噪音。
+# ⚠️ 真正的载流**不靠走线宽度**，而靠 VBAT / OUT 的铺铜（In2 / In1，priority 1）。
+#    自定义规则只能表达「最小线宽」，表达不了「必须铺铜」—— 见
+#    research/power-trace-width-precedent.md 与 PROJECT_HANDOFF.md §12。
+(rule "Power net min track width"
+	(condition "A.Type == 'track' && A.NetClass == 'Power'")
+	(constraint track_width (min 0.25mm))
+)

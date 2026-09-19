@@ -54,6 +54,17 @@ DRC_ALLOW = {
     "npth_inside_courtyard": "❓ 同上",
 }
 
+# 带**条数上限**的豁免：kind -> (最多允许几条, 理由)。超过上限即失败。
+# 为什么要这个机制：`track_width` 是 2026-09-20 新加的真护栏（自定义规则
+# `Starshield.kicad_dru` 要求 Power 类 ≥0.25 mm）。若把它整类加进 DRC_ALLOW，
+# 护栏就白加了；但它确实有**唯一一条几何上无法消除**的命中项 ——
+# 用「限额 + 理由」既保住护栏、又不留假绿灯。
+DRC_ALLOW_MAX = {
+    "track_width": (1, "VCHG_IN 长 208 mm 的 0.2 mm 充电路径走廊：两侧被邻近走线夹死、"
+                       "几何上加不宽（试算 0.3 mm 即撞线）。载流由同网络 VCHG_IN 铺铜"
+                       "（In2, 585 mm²）承担；若此项 >1 条或消失，说明布线被改动，需重核"),
+}
+
 
 def find_kicad_cli():
     from shutil import which
@@ -375,10 +386,21 @@ def main():
     _, kinds = run_drc(cli)
     unhandled = {}
     for (kind, sev), n in sorted(kinds.items()):
-        if sev == "error" and kind not in DRC_ALLOW:
-            unhandled[kind] = n
+        if sev != "error":
+            continue
+        if kind in DRC_ALLOW:
+            continue
+        if kind in DRC_ALLOW_MAX and n <= DRC_ALLOW_MAX[kind][0]:
+            continue
+        unhandled[kind] = n
     for (kind, sev), n in sorted(kinds.items()):
-        tag = "已豁免" if kind in DRC_ALLOW else ("❌" if sev == "error" else "warn")
+        if kind in DRC_ALLOW:
+            tag = "已豁免"
+        elif kind in DRC_ALLOW_MAX:
+            cap, _why = DRC_ALLOW_MAX[kind]
+            tag = "限额内(%d/%d)" % (n, cap) if n <= cap else "❌超限(%d>%d)" % (n, cap)
+        else:
+            tag = "❌" if sev == "error" else "warn"
         print(f"      {kind:32} {sev:8} ×{n:4}  {tag}")
     check("未豁免的 error 级违规 = 0", not unhandled, str(unhandled))
 
