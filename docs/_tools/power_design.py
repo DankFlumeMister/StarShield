@@ -258,7 +258,7 @@ CONN = {
 }
 
 # 需要跨子图的网络 → 用全局标签（B2 控制板子图沿用同名即可接上）
-GLOBAL_NETS = {"VBUS", "OUT", "VLED", "RGB_PWR_EN"}
+GLOBAL_NETS = {"VBUS", "OUT", "VBAT", "VLED", "RGB_PWR_EN"}
 
 # 特殊单点标签：网名只在标签里出现、没有对应元件引脚时，仍需一个落脚点。
 # （当前为空；留作扩展用）
@@ -293,8 +293,10 @@ NOTES = [
      "VBUS 经 F1（2A hold 自恢复保险丝，1812）后进 IN。"
      "注意：输入取 1.0A 超出 5.1k 的 USB 声明，是有意取舍，见 docs/power-architecture.md 3.7"),
     (25.4, 173.99,
-     "【电源路径】负载必须接 OUT 而不是 BAT（ADR-0002）。OUT 稳压到 VBAT + 225 mV，"
-     "满电时 OUT 约 4.4 V。VLED 由 OUT 经 Q1 门控 —— 属电池直供，不含任何升压（ADR-0007 / ADR-0005）"),
+     "【电源路径】重载（VLED 灯轨等）必须接 OUT 而不是 BAT（ADR-0002）。OUT 稳压到 VBAT + 225 mV，"
+     "满电时 OUT 约 4.4 V。VLED 由 OUT 经 Q1 门控 —— 属电池直供，不含任何升压（ADR-0007 / ADR-0005）。"
+     "⚠️ 2026-09-19 例外：nice!nano 模块的 B+/RAW 改接 VBAT（不再接 OUT）—— 因为模块自带充电器"
+     "要能把电流送进电池（插模块口即充电）；模块本身电流很小（休眠 20uA 级），不影响电源路径的意义"),
     (25.4, 182.88,
      "【走线电流约束】VLED 按 2-3 A 走线。但 BQ24072 的 OUT 短路保护阈值 VO(SC2) = 250 mV，"
      "VBAT - VOUT 超过该值并持续 250 us 即切断 OUT 并在 60 ms 后重试 "

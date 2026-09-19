@@ -198,9 +198,14 @@ def main():
         check("RGB_PWR_EN 跨图连通（J3B 孔13 + 电源子图 R8）",
               got_root.get("RGB_PWR_EN") == {("J3B", "13"), ("R8", "1")},
               str(sorted(got_root.get("RGB_PWR_EN", set()))))
-        check("OUT 跨图连通（J3B 孔1/2 = B+ + 电源子图 U1/Q1/R6/R7/C2）",
-              ("J3B", "1") in got_root.get("OUT", set())
-              and {"U1", "Q1", "R6", "R7", "C2"} <= {r for r, _ in got_root.get("OUT", set())})
+        # ⚠️ 2026-09-19 方案①：模块 B+/RAW 由 OUT 改接 VBAT（插模块口即充电）
+        check("VBAT 跨图连通（J3B 孔1/2 = B+/RAW + 电源子图 U1/J2/C3）",
+              {("J3B", "1"), ("J3B", "2")} <= got_root.get("VBAT", set())
+              and {"U1", "J2", "C3"} <= {r for r, _ in got_root.get("VBAT", set())},
+              str(sorted(got_root.get("VBAT", set()))[:6]))
+        check("OUT 仍是重载轨，且【不再】挂 J3B（改接 VBAT 后）",
+              {"U1", "Q1", "R6", "R7", "C2"} <= {r for r, _ in got_root.get("OUT", set())}
+              and ("J3B", "1") not in got_root.get("OUT", set()) and ("J3B", "2") not in got_root.get("OUT", set()))
         # 2026-09-18 M5 后：RGB 子图已绘制，LED_DIN 的另一端是 LED1.DIN
         # ⚠️ 2026-09-19 B6-1：LED_DIN 随实物孔序移到 J3A 孔 2（孔 1 是 GND）
         check("LED_DIN 跨图连通（J3A 孔2 + RGB 子图 LED1.DIN）",
@@ -246,8 +251,10 @@ def main():
     check("档 2（2.4G）：SW96.4 与 J3B 孔9(D18/P1.15) 同网 MODE2",
           g.get("MODE2") == {("SW96", "4"), ("J3B", "9")})
     # 供电
-    check("nice!nano B+(J3B 孔1) 接电源子图系统轨 OUT（不是 VBUS）",
-          ("J3B", "1") in g.get("OUT", set()) and ("J3B", "1") not in g.get("VBUS", set()))
+    check("nice!nano B+/RAW(J3B 孔1/2) 接电源子图 VBAT（电池节点，不是 VBUS/OUT）",
+          {("J3B", "1"), ("J3B", "2")} <= g.get("VBAT", set())
+          and ("J3B", "1") not in g.get("VBUS", set())
+          and ("J3B", "1") not in g.get("OUT", set()))
     check("nice!nano 3.3V(J3B 孔5) 是 VCC 网唯一源头（3.3V 轨）",
           ("J3B", "5") in g.get("VCC", set()))
     for c in ("C4", "C5", "C6"):
