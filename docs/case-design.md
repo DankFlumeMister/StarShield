@@ -55,13 +55,22 @@
 
 Fusion 没有进程外 API —— 脚本必须在 Fusion 进程内跑，因此**只能**通过它的入口触发。
 
-1. 打开 Fusion 360。
-2. **实用程序（Utilities）→ 脚本和加载项（Scripts and Add-Ins）**（快捷键 `Shift+S`）。
-3. 切到 **「脚本 / Scripts」** 标签 → 选中 **StarShieldCase** → **运行（Run）**。
+**⚠️ 两个先决条件（2026-09-21 实测踩过）**
+1. **「实用程序」标签只在打开了一个设计文档时才出现** —— 停在**主页（Home）**是找不到它的。
+   ⇒ 先在主页点「新建... → 零件设计 → 新建」，进入工作区后工具栏最右侧就有「实用程序」。
+2. **脚本必须放在 `%APPDATA%\Autodesk\Autodesk Fusion 360\API\Scripts\<名>\`**。
+   放到同级的 `MyScripts\` 里，**「脚本和加载项」对话框里看不到它**（首版就放错了）。
+
+**步骤**
+1. 打开 Fusion 360，进入任一设计（或按上面第 1 条新建一个零件设计）。
+2. 工具栏最右 **实用程序（Utilities）→ 脚本和加载项（Scripts and Add-Ins）**；
+   快捷键 **`Shift+S`** 更快（实测有效）。
+3. 对话框里：若「搜索」框有残留文字先清掉（点 ×）；在**脚本**列表里找到 **StarShieldCase**
+   → 点它那一行的 **▶（运行）**。
 4. 完成后看 `hardware/case/out/build.log`（逐步日志 + 每步体积自检）与 `out/` 下的 STEP/STL/预览图。
 
-脚本已装在 Fusion 的 `MyScripts/StarShieldCase/`（用户级脚本目录，**不会自动加载** ⇒ 零启动风险）。
-部署脚本：`python docs/_tools/deploy_fusion_addin.py`（重新装/更新用；`--remove` 卸载）。
+部署/更新脚本：`python docs/_tools/deploy_fusion_addin.py`（装到 `API\Scripts\` 与 `MyScripts\` 两处；
+`--remove` 卸载）。
 
 ## 5. ⚠️ 踩过的坑（Fusion 自动化事实，供后续复用）
 

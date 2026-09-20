@@ -23,7 +23,8 @@ SRC = r"D:/StarShield/hardware/case/fusion_build_case.py"
 NAME = "StarShieldCase"
 PROFILE = os.path.join(os.environ["APPDATA"], "Autodesk", "Autodesk Fusion 360")
 ADDIN_DIR = os.path.join(PROFILE, "API", "AddIns", NAME)
-SCRIPT_DIR = os.path.join(PROFILE, "MyScripts", NAME)
+SCRIPT_DIR = os.path.join(PROFILE, "API", "Scripts", NAME)        # ✅ Fusion 官方口径的用户脚本目录
+SCRIPT_DIR2 = os.path.join(PROFILE, "MyScripts", NAME)            # 备用（Fusion 也可能扫这里）
 AUTORUN_DIR = os.path.join(PROFILE, "MyScripts", "Autorun", NAME)
 
 MANIFEST = {
@@ -39,8 +40,18 @@ MANIFEST = {
     "editEnabled": True,
 }
 
+SCRIPT_MANIFEST = {
+    "autodeskProduct": "Fusion",
+    "type": "script",
+    "author": "StarShield",
+    "description": {"": "StarShield 底壳参数化建模（在「脚本和加载项」对话框里手动运行）"},
+    "supportedOS": "windows|mac|linux",
+    "editEnabled": True,
+    "version": "1.0.0",
+}
+
 if "--remove" in sys.argv:
-    for d in (ADDIN_DIR, SCRIPT_DIR, AUTORUN_DIR):
+    for d in (ADDIN_DIR, SCRIPT_DIR, SCRIPT_DIR2, AUTORUN_DIR):
         if os.path.isdir(d):
             shutil.rmtree(d)
             print("已删除", d.replace(PROFILE, "…"))
@@ -50,19 +61,18 @@ if "--remove" in sys.argv:
     print("已清空 Autorun 列表")
     sys.exit(0)
 
-# 1) add-in（自动运行）
+# 1) add-in（可自动运行；⚠️ 别把重活放在启动阶段 —— 实测会把 Fusion 跑崩，故 runOnStartup=False）
 os.makedirs(ADDIN_DIR, exist_ok=True)
 shutil.copy2(SRC, os.path.join(ADDIN_DIR, NAME + ".py"))
 with open(os.path.join(ADDIN_DIR, NAME + ".manifest"), "w", encoding="utf-8", newline="\n") as f:
     json.dump(MANIFEST, f, indent=2, ensure_ascii=False)
 
-# 2) 脚本副本（手动兜底）
-os.makedirs(SCRIPT_DIR, exist_ok=True)
-shutil.copy2(SRC, os.path.join(SCRIPT_DIR, NAME + ".py"))
-with open(os.path.join(SCRIPT_DIR, NAME + ".manifest"), "w", encoding="utf-8", newline="\n") as f:
-    m = dict(MANIFEST)
-    m.update({"type": "script", "runOnStartup": False, "id": str(uuid.uuid4())})
-    json.dump(m, f, indent=2, ensure_ascii=False)
+# 2) 用户脚本（手动运行的入口）—— **必须放 API\Scripts**，放 MyScripts 里对话框看不到
+for d in (SCRIPT_DIR, SCRIPT_DIR2):
+    os.makedirs(d, exist_ok=True)
+    shutil.copy2(SRC, os.path.join(d, NAME + ".py"))
+    with open(os.path.join(d, NAME + ".manifest"), "w", encoding="utf-8", newline="\n") as f:
+        json.dump(SCRIPT_MANIFEST, f, indent=2, ensure_ascii=False)
 
 # 3) 撤掉 Autorun 那份未文档化的尝试
 if os.path.isdir(AUTORUN_DIR):
