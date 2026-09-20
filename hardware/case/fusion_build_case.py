@@ -97,21 +97,46 @@ def circle(sk, cx, cy, dia):
     sk.sketchCurves.sketchCircles.addByCenterRadius(Pt(cx, cy), mm(dia / 2.0))
 
 
-def do_extrude(root, body, operation, depth, z, name):
-    """用**当前草图里的全部闭合轮廓**一次拉伸（一个特征 = 一批几何）。"""
+def do_extrude(root, body, operation, depth, z, name, min_loops=1):
+    """用**当前草图的闭合轮廓**拉伸（一个特征 = 一批几何）。
+
+    ⚠️ `min_loops` 用来避开「被围住的实心区」：若草图里若干矩形拼成一个**闭合环**，
+    Fusion 会把「环带」和「环内被围住的区域」都算成轮廓 —— 若一起拉伸，
+    本该做成**环形压边**的电池仓会被填成**实心块**（首次成功运行就踩了：
+    体积从 194.2 跳到 302.2 cm³，比设计值多出 8 倍，日志体积自检抓到的）。
+    ⇒ 环带轮廓有 2 个 loop（外圈 + 内圈），实心区只有 1 个 ⇒ 传 `min_loops=2` 即可只要环带。
+    """
     sk = root.sketches.item(root.sketches.count - 1)
     profs = adsk.core.ObjectCollection.create()
     for i in range(sk.profiles.count):
-        profs.add(sk.profiles.item(i))
+        pr = sk.profiles.item(i)
+        if pr.profileLoops.count >= min_loops:
+            profs.add(pr)
     if profs.count == 0:
-        raise RuntimeError("草图里没有闭合轮廓：%s" % name)
+        raise RuntimeError("草图里没有满足条件的闭合轮廓（min_loops=%d）：%s" % (min_loops, name))
     ei = root.features.extrudeFeatures.createInput(profs, operation)
-    ei.setDistanceExtent(False, VI(depth))
+    ei.setDistanceExtent(False, VI(depth))    # 官方标注「已废弃」但明确说明继续兼容；改新 API 风险更大
     if body is not None:
         ei.participantBodies = [body]
     feat = root.features.extrudeFeatures.add(ei)
-    log("     · 特征 %s：%d 个轮廓，深度 %.2f" % (name, profs.count, depth))
+    log("     · 特征 %s：%d 个轮廓（≥%d 环），深度 %.2f" % (name, profs.count, min_loops, depth))
     return feat
+
+
+def vol(root):
+    b = get_body(root)
+    return b.volume if b else 0.0
+
+
+def check_delta(name, before, after, lo, hi):
+    """体积自检：某步的体积增量应落在 [lo, hi] cm³ 内，否则说明几何被画错。
+    ⚠️ 这道闸门抓到过一次真实缺陷：电池压边把「环带 + 被围住的实心区」一起拉伸，
+    体积多增了 8 倍（108 而非 13 cm³）⇒ 压边成了实心块、电池根本放不进去。"""
+    d = after - before
+    bad = not (lo <= d <= hi)
+    log("    %s 体积增量 %.2f cm³（期望 %.1f–%.1f）%s"
+        % ("❌" if bad else "✅", d, lo, hi, "← 异常，几何可能有误" if bad else ""))
+    return d
 
 
 def get_body(root):
@@ -136,10 +161,26 @@ def run(_context):
         holes = data["mounting_holes"]
         log("板框 %.4f × %.4f，安装孔 %d 个" % (bx1 - bx0, by1 - by0, len(holes)))
 
-        doc = app.documents.add(adsk.core.DocumentTypes.FusionDesignDocumentType)
-        design = adsk.fusion.Design.cast(app.activeProduct)
+        # 文档复用：若当前就是「未保存的空白设计」就直接用，避免每跑一次多一个「无标题」
+        doc = app.activeDocument
+        reuse = False
+        if doc is not None and getattr(doc, "dataFile", None) is None:
+            try:
+                d0 = adsk.fusion.Design.cast(app.activeProduct)
+                if d0 is not None and d0.rootComponent.bRepBodies.count == 0:
+                    reuse = True
+            except Exception:
+                reuse = False
+        if reuse:
+            design = adsk.fusion.Design.cast(app.activeProduct)
+            log("复用当前空白设计:", doc.name)
+        else:
+            doc = app.documents.add(adsk.core.DocumentTypes.FusionDesignDocumentType)
+            design = adsk.fusion.Design.cast(app.activeProduct)
+            log("新建设计文档")
         root = design.rootComponent
-        root.name = "StarShield-case"
+        # ⚠️ 不能给根组件改名（Fusion 报 "root component name cannot be changed"），
+        #    首版就崩在这一行 —— 故此处不再设 root.name。
 
         z_floor = P["floor"]
         z_pcb = z_floor + P["depth"]
@@ -165,7 +206,8 @@ def run(_context):
         tray = get_body(root)
         do_extrude(root, tray, adsk.fusion.FeatureOperations.CutFeatureOperation,
                    z_top - z_floor + 2, z_floor, "内腔")
-        log("② 挖腔后体积 %.1f cm³" % get_body(root).volume)
+        v2 = vol(root)
+        log("② 挖腔后体积 %.1f cm³" % v2)
 
         # ③ 三处侧壁开孔（顶部开口的槽）—— 一个草图装 3 个矩形，一次切
         z_from = z_pcb - 1.0
@@ -195,7 +237,7 @@ def run(_context):
         tray = get_body(root)
         do_extrude(root, tray, adsk.fusion.FeatureOperations.CutFeatureOperation,
                    P["boss_pilot_depth"] + 0.5, z_pcb - P["boss_pilot_depth"], "M2 底孔 ×8")
-        log("④ 柱与底孔完成，体积 %.1f cm³" % get_body(root).volume)
+        check_delta("④ M2 柱与底孔", v2, vol(root), 0.5, 5.0)
 
         # ⑤ 电池仓压边：两个电池 × 每边两条长臂（下沿沉入底板 0.5 mm，保证 join 实体相交）
         bats = [(ix0 + P["bat_inset"], (iy0 + iy1) / 2 - P["bat_l"] / 2),
@@ -210,9 +252,10 @@ def run(_context):
             log("⑤ 电池 %d 压边（x %.1f..%.1f，y %.1f..%.1f）"
                 % (k + 1, bxx - P["clip"], bxx + P["bat_w"] + P["clip"], byy - P["clip"], byy + P["bat_l"] + P["clip"]))
         tray = get_body(root)
+        v4 = vol(root)
         do_extrude(root, tray, adsk.fusion.FeatureOperations.JoinFeatureOperation,
-                   P["bat_t"] + P["clip"] + 0.5, z_floor - 0.5, "电池压边")
-        log("⑤ 体积 %.1f cm³" % get_body(root).volume)
+                   P["bat_t"] + P["clip"] + 0.5, z_floor - 0.5, "电池压边（只取环带）", min_loops=2)
+        check_delta("⑤ 电池压边", v4, vol(root), 5.0, 25.0)
 
         # ⑥ 沿 x = seam 剖成两件
         pi = root.constructionPlanes.createInput()
