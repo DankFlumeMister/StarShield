@@ -129,5 +129,11 @@ hardware/pcb/reference/
 # 本仓库选确定性。要把成品发给复刻者时，**把 zip 挂在 GitHub Release 附件**上（不占仓库历史）。
 hardware/pcb/StarShield/fab/
 
+# --- 外壳建模产物（Fusion 导出）---
+# 由 `hardware/case/fusion_build_case.py` 生成到 hardware/case/out/（STEP / STL / 预览图 / 构建日志）。
+# **不入库**：STEP 头部同样带创建时间戳 ⇒ 与上一节同一个理由（确定性判据）。
+# 要发布成品时把 STL/STEP 挂 Release 附件；脚本与设计文档入库。
+hardware/case/out/
+
 # --- 调研临时工作区（抓取的第三方页面/PDF/一次性脚本，不入库）---
 _jst/
