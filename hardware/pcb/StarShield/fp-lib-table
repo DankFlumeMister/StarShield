@@ -1,0 +1,3 @@
+(fp_lib_table
+  (lib (name "StarShield")(type "KiCad")(uri "${KIPRJMOD}/footprints/StarShield.pretty")(options "")(descr "StarShield 自画封装：MX 热插拔座 8 档（313/313 零缺失）"))
+)

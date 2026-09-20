@@ -120,5 +120,14 @@ docs/_generated/*
 # --- 第三方参考源（无许可证，仅本地学习，不入库）---
 hardware/pcb/reference/
 
+# --- 投板产物（Gerber / 钻孔 / BOM / CPL / 订单说明）---
+# 由 `python docs/_tools/export_fab.py` 生成到 hardware/pcb/StarShield/fab/。
+# **刻意不入库**：gerber 头部与 .gbrjob 带创建时间戳 —— 实测同一块板连导两次，
+# 14/14 个文件逐字节都不同 ⇒ 入库会让「重跑生成器后 git status 对 tracked 文件无差异」
+# 这条确定性判据永远失败（与本文件上一节同一个理由）。
+# 社区常见做法是把 gerber 一并提交（本机样本里 235 个 zip），那是拿确定性换便利；
+# 本仓库选确定性。要把成品发给复刻者时，**把 zip 挂在 GitHub Release 附件**上（不占仓库历史）。
+hardware/pcb/StarShield/fab/
+
 # --- 调研临时工作区（抓取的第三方页面/PDF/一次性脚本，不入库）---
 _jst/

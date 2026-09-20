@@ -78,16 +78,52 @@
 
 ---
 
-## 4. 投板文件清单与流程（照成熟做法）
+## 4. 投板文件包：已可一键生成 ✅
 
-1. **Gerber（RS-274X / X2）**：4 个铜层 + 2 阻焊 + 2 丝印 + 2 钢网 + 外形
-   （厂家要求 ≥7 个文件；本板将输出 11 个 + 钻孔）。
-2. **钻孔**：Excellon，PTH / NPTH 分开输出。
-3. **说明**：把 §3 的下单规格 + §1 的答复话术一并写进订单备注。
-4. **第三方 gerber 复核**（成熟做法，官方博客亦强调）：用独立查看器（KiCad 的 Gerber Viewer /
-   `gerbv` / 在线查看器）确认外形层、槽孔、自定义焊盘渲染无误，再提交。
-5. **不建议**在首次投板就追求消除全部 DRC 噪音（丝印/封装库类 711 条）：厂家已明确会自行处理
-   压在焊盘上的字符，其余属外观差异，与电气、可制造性无关。
+```bash
+python docs/_tools/export_fab.py          # 输出到 hardware/pcb/StarShield/fab/
+```
+
+产物（实测，2026-09-20）：
+
+| 文件 | 说明 |
+| --- | --- |
+| `gerbers/Starshield-*.gbr` ×11 | 4 铜层 + 2 阻焊 + 2 丝印 + 2 钢网 + 外形（厂家要求 ≥7 个） |
+| `gerbers/Starshield-PTH.drl` / `-NPTH.drl` | Excellon，**PTH / NPTH 分开**、mm、小数点格式 |
+| `gerbers/Starshield-job.gbrjob` | Gerber Job 元数据（层叠/材料，X2 规范） |
+| `StarShield-gerbers.zip` | **可直接上传代工厂**（1.75 MB，含上述 14 个文件） |
+| `BOM-Starshield.csv` | 313 个元件的分组 BOM（`kicad-cli sch export bom`，从根图导出含全部子图） |
+| `CPL-Starshield.csv` | 贴片坐标（手焊不需要，留给日后 PCBA；按社区惯例命名） |
+| `ORDER_SPEC.md` | 下单规格 + 被 EQ 询问时的答复话术（即本文 §3 与 §1 的摘录） |
+
+### ⚠️ 为什么不把投板产物入库
+
+**实测：同一块板连导两次，14/14 个文件逐字节都不同** —— gerber 头部（X2 属性）与 `.gbrjob`
+里带创建时间戳。入库会让本项目的硬判据「重跑生成器后 `git status` 对 tracked 文件无差异」
+永远失败。因此 `.gitignore` 里忽略了 `hardware/pcb/StarShield/fab/`。
+
+> 社区常见做法是把 gerber 一并提交（本机样本里有 235 个 zip/仓库），那是**拿确定性换便利**；
+> 本仓库选确定性。要把成品给复刻者时，**把 zip 挂到 GitHub Release 附件**（不占仓库历史）。
+
+### 复核与踩坑
+
+- **第三方 gerber 复核**（成熟做法）：用独立查看器（KiCad Gerber Viewer / `gerbv` / 在线）
+  确认外形层、槽孔、自定义焊盘渲染无误，再提交订单。
+- ⚠️ **kicad-cli 用 Windows 版时不要喂 MSYS 风格路径**（`/d/StarShield/...`）——
+  会报「原理图文件不存在或无法访问 / 加载原理图失败」，看着像文件坏了，其实是路径方言问题。
+  脚本内部已统一用绝对 Windows 路径。
+- ⚠️ 导 BOM 时 kicad-cli 会提示「原理图存在批注错误」。已逐项排查：**全工程 0 个未批注位号**
+  （`Reference` 无 `?`）、BOM 共 313 件与 321 个封装（含 8 个安装孔）自洽 ⇒ **属提示误报**。
+
+### 顺带修掉的一个可复刻性缺口
+
+本工程原先**没有 `fp-lib-table`** ⇒ 任何人克隆后打开工程，ERC 都会报 95 条
+`footprint_link_issues`（「当前配置中不包含封装库 'StarShield'」），因为自画的
+MX 热插拔座封装库没有被映射。已按社区成熟写法（参考 Apollo87H 的同名文件）补上
+`hardware/pcb/StarShield/fp-lib-table`，指向 `${KIPRJMOD}/footprints/StarShield.pretty`。
+**复核结果：ER-C 里 `footprint_link_issues` 95 → 0。**
+（符号侧用的是 KiCad 官方库 —— 74xx / Battery_Management / Connector / Device / LED /
+Switch / Transistor_FET / power ⇒ 不需要 `sym-lib-table`。）
 
 **为什么不为「内层过孔 0.3 mm」重布**（成本对照）：
 
