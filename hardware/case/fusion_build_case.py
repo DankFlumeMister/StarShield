@@ -3,10 +3,14 @@
 
 设计依据（全部来自工程文档，不是自由发挥）：
   - **PCB 是上盖**、**底壳按约等分两件**（缝落在键位列边界）：`docs/hardware-geometry.md` §3.1（G4）
-  - 侧壁 2 mm、外扩 4 mm/边、M2 自攻柱 φ4–5：`docs/decision-package-2026-09-18.md` §3
+  - 侧壁 2 mm、外扩 4 mm/边；M2 **热熔螺母**柱 φ6.4 / 孔 3.0×5.0：`docs/case-benchmark.md` §2.3（2× 规则）
   - 8 个 M2 安装孔（NPTH φ2.2，H1–H8）：从板文件提取
   - 三处开孔坐标：`docs/nice-nano-physical-verification.md` §6.7
   - 电池仓左右各 10.5 × 56 × 68、机壳深 ≥11 mm：`docs/power-architecture.md` §3.6（G5）
+  - 板下 15.0 = 座 **1.8**（Kailh 原厂图纸，非假设）+ 压边 2.0 + 电池 10.5 + 余量 0.7；
+    板面 +5.0 / 板厚 1.5 / 开孔 14×14 取 Cherry MX 图纸：`docs/case-benchmark.md` §2.1–§2.3
+  - 倾角 5.5°、脚垫 Ø8×3、缝销 Ø4×8、压边过线缺口 3.0：`docs/case-benchmark.md` §2.4–§2.6
+    （**已定值，v2 才建几何**；本脚本里作为参数声明）
 
 几何输入：`hardware/case/case_inputs.json`（`docs/_tools/extract_case_inputs.py` 生成）
 参数预检：`docs/_tools/preflight_case.py`（全绿才动手）
@@ -44,12 +48,19 @@ INPUTS = os.path.join(CASE_DIR, "case_inputs.json")
 LOG = os.path.join(OUT_DIR, "build.log")
 
 # ---- 参数（mm；与 docs/_tools/preflight_case.py 必须一致）----
+# 取值依据：docs/case-benchmark.md（商业键盘规格书 + 社区方案 + 器件原厂图纸）
 P = {
     "wall": 2.0, "floor": 2.5, "clearance": 0.3, "depth": 15.0, "lip": 4.5,
-    "boss_od": 5.0, "boss_pilot": 1.7, "boss_pilot_depth": 8.0,
-    "bat_w": 56.0, "bat_l": 68.0, "bat_t": 10.5, "bat_inset": 8.0,
+    # 板下 15.0 = 插拔座 1.8（Kailh 图纸，板下占高）+ 压边 2.0 + 电池 10.5 + 余量 0.7
+    # M2 **热熔螺母**柱（旧的自攻柱 φ5.0/底孔1.7 不适于反复拆装；2× 规则 ⇒ φ6.4/孔3.0/深5.0）
+    "boss_od": 6.4, "boss_pilot": 3.0, "boss_pilot_depth": 5.0,
+    "bat_w": 56.0, "bat_l": 68.0, "bat_t": 10.5, "bat_inset": 8.5,
     "clip": 2.0, "clip_len": 12.0, "clip_arm": 12.0,
     "seam_x": 189.70,
+    # --- 已定值但 **v2 才建几何**（见 case-benchmark §7）：倾角 5.5°、脚垫 Ø8×3、缝销 Ø4×8、过线缺口 3.0
+    "tilt_deg": 5.5, "foot_dia": 8.0, "foot_h": 3.0,
+    "seam_pin_dia": 4.0, "seam_pin_len": 8.0, "seam_pin_clear": 0.2,
+    "clip_notch_w": 3.0,
 }
 OPENINGS = [
     {"name": "充电 USB-C (J1)", "kind": "front", "center": 15.0, "w": 11.0},
@@ -346,14 +357,14 @@ def run(_context):
         tray = get_body(root)
         do_extrude(root, tray, adsk.fusion.FeatureOperations.JoinFeatureOperation,
                    z_pcb - z_floor, z_floor, "M2 柱 ×8")
-        # ④b 底孔
+        # ④b 热熔螺母孔（M2 嵌件：孔径 3.0、深 5.0 = 螺母长 4 + 让位 1）
         sk = root.sketches.add(plane_at(root, z_pcb - P["boss_pilot_depth"]))
         for h in holes:
             circle(sk, h["x"], YF(h["y"]), P["boss_pilot"])
         tray = get_body(root)
         do_extrude(root, tray, adsk.fusion.FeatureOperations.CutFeatureOperation,
-                   P["boss_pilot_depth"] + 0.5, z_pcb - P["boss_pilot_depth"], "M2 底孔 ×8")
-        check_delta("④ M2 柱与底孔", v2, vol(root), 0.5, 5.0)
+                   P["boss_pilot_depth"] + 0.5, z_pcb - P["boss_pilot_depth"], "M2 热熔螺母孔 ×8")
+        check_delta("④ M2 柱与螺母孔", v2, vol(root), 1.0, 4.5)
 
         # ⑤ 电池仓压边：**每个电池画两个同心矩形**（外框 = 电池仓 + 压边宽，内框 = 电池仓本身）
         #    ⇒ Fusion 才会把「环带」算成一个**带孔轮廓（2 个 loop）**，内框区域是 1 个 loop。

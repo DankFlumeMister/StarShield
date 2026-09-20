@@ -5,11 +5,13 @@
 
 判据（每条都打印实际值）：
   A. 内腔 ⊃ 板框 + 单边间隙；外形 = 内腔 + 2×壁厚
-  B. 板下净空 ≥ 电池厚 + 插拔座高 + 余量
+  B. 板下净空 ≥ 电池厚 + **压边** + 插拔座高 + 余量
+     ⚠️ 2026-09-21 修：原判据漏了压边 ⇒ 座高取错（3.5）时也不会报错，实际会撞。见 docs/case-benchmark.md §3.1
   C. 8 个 M2 柱完全落在外形之内（允许与侧壁相融）
   D. 电池仓 + 压边角完全落在内腔之内，且不与任一螺丝柱相交
   E. 三处开孔完全落在对应侧壁之内，且不切到螺丝柱
   F. 分件缝不穿过任何螺丝柱 / 电池
+  G. 螺丝柱满足「M2 热熔螺母」的 2× 规则与孔深（2026-09-21 新增，依据 docs/case-benchmark.md §2.3）
 
 用法：python docs/_tools/preflight_case.py
 """
@@ -23,11 +25,14 @@ INP = os.path.join(ROOT, "hardware", "case", "case_inputs.json")
 
 P = {
     "wall": 2.0, "floor": 2.5, "clearance": 0.3, "depth": 15.0, "lip": 4.5,
-    "boss_od": 5.0, "boss_pilot": 1.7,
-    "bat_w": 56.0, "bat_l": 68.0, "bat_t": 10.5, "bat_inset": 8.0,
+    "boss_od": 6.4, "boss_pilot": 3.0, "boss_pilot_depth": 5.0,   # M2 热熔螺母（OD3.2×L4，2× 规则，见 case-benchmark §2.3/§3.5）
+    "bat_w": 56.0, "bat_l": 68.0, "bat_t": 10.5, "bat_inset": 8.5,
     "clip": 2.0, "clip_len": 12.0, "seam_x": 189.70,
 }
-SOC = 3.5          # 热插拔座高度（板下）—— 见下方「待实测」说明
+# 热插拔座在 PCB **下方**的占高：Kailh CPG151101S11 原厂图纸 1.80±0.05（总高 3.05）[DOC]
+# 2026-09-21 更正：旧值 3.5 是假设值，且与压边参数自相矛盾（见 docs/case-benchmark.md §3.1）
+SOC = 1.8
+MARGIN = 0.7       # 板下余量（座/压边/电池的装配与打印公差）
 PCB_T = 1.6
 OPENINGS = [
     {"name": "charge USB-C", "kind": "front", "center": 15.0, "w": 11.0},
@@ -64,13 +69,17 @@ chk("内腔比板框大（单边 %.2f）" % P["clearance"],
 chk("外形 = 内腔 + 2×壁厚", abs((ox1 - ox0) - ((ix1 - ix0) + 2 * P["wall"])) < 1e-6,
     "%.2f = %.2f + 2×%.1f" % (ox1 - ox0, ix1 - ix0, P["wall"]))
 
-print("\n=== B. 板下净空 vs 电池 + 插拔座 ===")
-need = P["bat_t"] + SOC
+print("\n=== B. 板下净空 vs 电池 + 压边 + 插拔座 ===")
+need = P["bat_t"] + P["clip"] + SOC
 free = P["depth"]
-chk("净空 %.1f ≥ 电池 %.1f + 座 %.1f = %.1f（余 %.1f）"
-    % (free, P["bat_t"], SOC, need, free - need), free >= need,
-    "电池顶面 z=%.2f，座底面 z=%.2f ⇒ 间隙 %.2f mm"
-    % (z_floor + P["bat_t"], z_pcb - SOC, P["depth"] - need))
+chk("净空 %.1f ≥ 电池 %.1f + 压边 %.1f + 座 %.1f + 余量 %.1f = %.1f"
+    % (free, P["bat_t"], P["clip"], SOC, MARGIN, need + MARGIN),
+    free >= need + MARGIN,
+    "压边顶面 z=%.2f，座底面 z=%.2f ⇒ 间隙 %.2f mm"
+    % (z_floor + P["bat_t"] + P["clip"], z_pcb - SOC, P["depth"] - need))
+chk("电池顶面不碰座底面", P["bat_t"] + P["clip"] <= P["depth"] - SOC,
+    "%.1f + %.1f = %.1f ≤ %.1f − %.1f = %.1f"
+    % (P["bat_t"], P["clip"], P["bat_t"] + P["clip"], P["depth"], SOC, P["depth"] - SOC))
 
 print("\n=== C. 螺丝柱 ===")
 for h in holes:
@@ -119,8 +128,32 @@ chk("缝不穿电池仓", not cross_bat, ("穿：%s" % cross_bat) if cross_bat e
 print("  两件跨度：A %.1f mm・B %.1f mm（打印床 256 ✓）"
       % (P["seam_x"] - ox0, ox1 - P["seam_x"]))
 
-print("\n⚠️ 待实测/待定的输入（本预检按假设值算）")
-print("  - 热插拔座高度按 %.1f mm 假设（未实测；见 docs/case-design.md 待办）" % SOC)
-print("  - 定位板与 PCB 的间距、板的固定方式：暂未建（v1 只做底壳 + 螺丝柱）")
+print("\n=== G. 螺丝柱：M2 热熔螺母是否合规 ===")
+# 依据：柱外径 ≥ 2× 嵌件外径 —— 环向应力膝点（absurdtools）；柱壁 ≥ 1.6 mm（meshra / printforgehq）
+# 假定嵌件 M2 × OD3.2 × L4（社区最常见规格；**采购后按厂家图纸复核**）
+INS_OD = 3.2
+chk("柱外径 %.1f ≥ 2× 嵌件外径 %.1f = %.1f" % (P["boss_od"], INS_OD, 2 * INS_OD),
+    P["boss_od"] >= 2 * INS_OD, "余量 %.2f mm" % (P["boss_od"] - 2 * INS_OD))
+chk("柱壁 (柱径−孔径)/2 ≥ 1.6 mm", (P["boss_od"] - P["boss_pilot"]) / 2 >= 1.6,
+    "(%.1f − %.1f)/2 = %.2f mm" % (P["boss_od"], P["boss_pilot"], (P["boss_od"] - P["boss_pilot"]) / 2))
+chk("螺母孔深 %.1f ≥ 螺母长 4.0 + 1.0 让位" % P["boss_pilot_depth"],
+    P["boss_pilot_depth"] >= 5.0, "孔底 z=%.2f（柱顶 z=%.2f）"
+    % (z_pcb - P["boss_pilot_depth"], z_pcb))
+chk("孔深 < 柱高（不穿透底板）", P["boss_pilot_depth"] < (z_pcb - z_floor),
+    "%.1f < %.1f" % (P["boss_pilot_depth"], z_pcb - z_floor))
+# 柱与电池压边的净距（两边都是本体材料，但过窄的缝打印会拉丝 ⇒ 目标 ≥ 1.0 mm）
+worst = 9e9
+for h in holes:
+    if abs(h["y"] - (iy0 + iy1) / 2) < P["bat_l"] / 2 + P["clip"]:
+        for (bxx, _byy) in bats:
+            for edge in (bxx - P["clip"], bxx + P["bat_w"] + P["clip"]):
+                worst = min(worst, abs(h["x"] - edge) - P["boss_od"] / 2)
+chk("柱边与压边外缘净距 ≥ 1.0 mm", worst >= 1.0 - 1e-6,
+    "最窄 %.2f mm（过窄会拉丝/粘连；不够就把 bat_inset 调大）" % worst)
+
+print("\n⚠️ 待实测/待定的输入")
+print("  - 热插拔座占高按 %.1f mm（Kailh 图纸标称 ±0.05，非实物实测；B6 采购后复核）" % SOC)
+print("  - USB-C 开口宽 11.0/10.0：按连接器体+0.3/边成立，**插头外壳宽度未实测**（量一根目标线）")
+print("  - 倾角 5.5° / 脚垫 Ø8×3 / 缝销 Ø4×8 —— 已在 docs/case-benchmark.md 定值，**v2 才建几何**")
 print("\n%s" % ("✅ 预检通过" if ok else "❌ 预检有失败项"))
 sys.exit(0 if ok else 1)
