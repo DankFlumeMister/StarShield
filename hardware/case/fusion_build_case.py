@@ -239,18 +239,20 @@ def run(_context):
                    P["boss_pilot_depth"] + 0.5, z_pcb - P["boss_pilot_depth"], "M2 底孔 ×8")
         check_delta("④ M2 柱与底孔", v2, vol(root), 0.5, 5.0)
 
-        # ⑤ 电池仓压边：两个电池 × 每边两条长臂（下沿沉入底板 0.5 mm，保证 join 实体相交）
+        # ⑤ 电池仓压边：**每个电池画两个同心矩形**（外框 = 电池仓 + 压边宽，内框 = 电池仓本身）
+        #    ⇒ Fusion 才会把「环带」算成一个**带孔轮廓（2 个 loop）**，内框区域是 1 个 loop。
+        #    ⚠️ 别用「4 个互相重叠的矩形」拼环：那样会被切成若干单环区域，
+        #    且「环内区」也是一个 1 环轮廓 ⇒ 无法用 loop 数区分，会连电池仓一起填实
+        #    （2026-09-21 实测：体积多增 108 而非 13 cm³）。
         bats = [(ix0 + P["bat_inset"], (iy0 + iy1) / 2 - P["bat_l"] / 2),
                 (ix1 - P["bat_inset"] - P["bat_w"], (iy0 + iy1) / 2 - P["bat_l"] / 2)]
+        c = P["clip"]
         sk = root.sketches.add(plane_at(root, z_floor - 0.5))
         for k, (bxx, byy) in enumerate(bats):
-            # 电池左侧与右侧各一条压臂（沿 y 方向全长），再在两端各加一小段沿 x 的挡边
-            rect(sk, bxx - P["clip"], byy - P["clip"], bxx, byy + P["bat_l"] + P["clip"])
-            rect(sk, bxx + P["bat_w"], byy - P["clip"], bxx + P["bat_w"] + P["clip"], byy + P["bat_l"] + P["clip"])
-            rect(sk, bxx, byy - P["clip"], bxx + P["bat_w"], byy)
-            rect(sk, bxx, byy + P["bat_l"], bxx + P["bat_w"], byy + P["bat_l"] + P["clip"])
-            log("⑤ 电池 %d 压边（x %.1f..%.1f，y %.1f..%.1f）"
-                % (k + 1, bxx - P["clip"], bxx + P["bat_w"] + P["clip"], byy - P["clip"], byy + P["bat_l"] + P["clip"]))
+            rect(sk, bxx - c, byy - c, bxx + P["bat_w"] + c, byy + P["bat_l"] + c)   # 外框
+            rect(sk, bxx, byy, bxx + P["bat_w"], byy + P["bat_l"])                   # 内框（电池仓）
+            log("⑤ 电池 %d 压边（电池仓 x %.1f..%.1f，y %.1f..%.1f；压边宽 %g）"
+                % (k + 1, bxx, bxx + P["bat_w"], byy, byy + P["bat_l"], c))
         tray = get_body(root)
         v4 = vol(root)
         do_extrude(root, tray, adsk.fusion.FeatureOperations.JoinFeatureOperation,
